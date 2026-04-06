@@ -1,4 +1,5 @@
 const Database = require('better-sqlite3');
+const crypto = require('crypto');
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS locations (
@@ -14,6 +15,7 @@ const SCHEMA = `
     type TEXT NOT NULL DEFAULT 'box',
     description TEXT DEFAULT '',
     location_id INTEGER NOT NULL,
+    qr_token TEXT UNIQUE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE
   );
