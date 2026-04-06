@@ -30,12 +30,21 @@ npm install
 
 This installs dependencies for both `backend/` and `frontend/` via the root `postinstall` script.
 
-### 2. Configure the port (optional)
+### 2. Configure environment (optional)
 
 ```bash
 cp .env.example .env
 # Edit .env to change PORT if needed (default: 43127)
 ```
+
+**Scanning QR codes from a phone:** QR codes encode the URL that will be opened when scanned. By default this uses the origin of the browser tab displaying the QR — which is `localhost` and unreachable from another device. To make QR codes scannable on your local network, set `VITE_PUBLIC_BASE_URL` to your machine's LAN address **before building the frontend**:
+
+```bash
+# .env
+VITE_PUBLIC_BASE_URL=http://192.168.1.42:43127
+```
+
+Find your LAN IP with `ip addr` (Linux) or `ipconfig` (Windows) or `ifconfig` (macOS). Then rebuild with `npm run build`.
 
 ### 3. Build the frontend
 

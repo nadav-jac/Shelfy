@@ -376,7 +376,7 @@ export default function ContainerDetailPage() {
         <Modal title={`QR — ${container.name}`} onClose={() => setModal(null)}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
             <QRCodeSVG
-              value={`${window.location.origin}/scan/container/${container.qr_token}`}
+              value={`${import.meta.env.VITE_PUBLIC_BASE_URL || window.location.origin}/scan/container/${container.qr_token}`}
               size={220}
               marginSize={2}
             />
