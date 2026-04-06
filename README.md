@@ -4,11 +4,11 @@ A simple home storage manager. Track what's in your cabinets, shelves, and boxes
 
 ## Stack
 
-| Layer    | Tech                              |
-|----------|-----------------------------------|
-| Frontend | React 18 + Vite + React Router v6 |
-| Backend  | Node.js + Express                 |
-| Database | SQLite (via `better-sqlite3`)     |
+| Layer    | Tech                                         |
+|----------|----------------------------------------------|
+| Frontend | React 18 + Vite + React Router v6 + PWA      |
+| Backend  | Node.js + Express                            |
+| Database | SQLite (via `better-sqlite3`)                |
 
 ## Data model
 
@@ -52,6 +52,27 @@ npm start
 ```
 
 Open **http://localhost:43127** — the same process serves both the API and the UI.
+
+---
+
+## Installing on mobile (PWA)
+
+Shelfy is a Progressive Web App. Once the server is running, you can install it on your phone like a native app.
+
+### Android (Chrome)
+
+1. Open the app URL in Chrome.
+2. Tap the **three-dot menu** → **Add to Home screen**.
+3. Tap **Install** in the prompt that appears.
+
+### iOS (Safari)
+
+1. Open the app URL in Safari.
+2. Tap the **Share** button (rectangle with arrow).
+3. Scroll down and tap **Add to Home Screen**.
+4. Tap **Add**.
+
+The installed app opens full-screen with no browser chrome, and its static assets (shell, JS, CSS) load instantly from cache even without a network connection. API calls (your data) still require connectivity.
 
 ---
 
@@ -122,8 +143,13 @@ Shelfy/
 │   └── package.json
 │
 └── frontend/
-    ├── index.html
-    ├── vite.config.js      # Dev server proxies /api → backend port
+    ├── index.html          # PWA meta tags (theme-color, apple-touch-icon, etc.)
+    ├── vite.config.js      # Dev server proxy + VitePWA plugin config
+    ├── public/
+    │   ├── favicon.svg
+    │   └── icons/
+    │       ├── icon-192.svg    # PWA icon (Android home screen)
+    │       └── icon-512.svg    # PWA icon (splash screen / maskable)
     ├── src/
     │   ├── main.jsx
     │   ├── App.jsx
