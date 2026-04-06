@@ -74,6 +74,8 @@ Shelfy is a Progressive Web App. Once the server is running, you can install it 
 
 The installed app opens full-screen with no browser chrome, and its static assets (shell, JS, CSS) load instantly from cache even without a network connection. API calls (your data) still require connectivity.
 
+**Keeping data fresh:** Every page has a **Refresh** button (↻) in the header. Data also auto-refreshes whenever you switch back to the app tab — so changes made on another device appear without any manual action. On mobile, **pull down** from the top of any page to refresh.
+
 ---
 
 ## Development mode (two processes)
@@ -155,6 +157,8 @@ Shelfy/
     │   ├── App.jsx
     │   ├── App.css
     │   ├── api.js
+    │   ├── hooks/
+    │   │   └── usePullToRefresh.js  # Touch gesture hook for pull-to-refresh
     │   ├── components/
     │   │   ├── Navbar.jsx
     │   │   └── Modal.jsx
