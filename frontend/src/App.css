@@ -529,6 +529,53 @@ input, textarea, select { font-family: inherit; }
   font-weight: 700;
 }
 
+/* ─── Spin animation (used by refresh button and pull indicator) ────────────── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Pull-to-refresh indicator ─────────────────────────────────────────────── */
+.pull-indicator {
+  position: fixed;
+  top: 56px; /* navbar height */
+  left: 50%;
+  transform: translateX(-50%) translateY(-100%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+
+.pull-indicator svg {
+  color: var(--primary);
+  transition: transform 0.1s;
+}
+
+.pull-indicator.pulling {
+  /* translateY is driven inline via style.top */
+  opacity: 1;
+}
+
+.pull-indicator.refreshing {
+  opacity: 1;
+}
+
+.pull-indicator.refreshing svg {
+  animation: spin 0.8s linear infinite;
+}
+
+/* ─── Refresh button spinner ─────────────────────────────────────────────────── */
+.btn-refresh svg { display: block; }
+.btn-refresh.spinning svg { animation: spin 0.8s linear infinite; }
+
 /* ─── Responsive ────────────────────────────────────────────────────────────── */
 @media (max-width: 600px) {
   .page-header { flex-direction: column; }
