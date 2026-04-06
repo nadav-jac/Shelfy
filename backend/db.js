@@ -44,8 +44,11 @@ const hasQrToken = db.prepare(
 ).get().c > 0;
 
 if (!hasQrToken) {
-  db.exec(`ALTER TABLE containers ADD COLUMN qr_token TEXT UNIQUE`);
+  db.exec(`ALTER TABLE containers ADD COLUMN qr_token TEXT`);
 }
+
+// Ensure the unique index exists (safe to run on both fresh and existing DBs).
+db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_containers_qr_token ON containers(qr_token)`);
 
 // Backfill any rows that still have a NULL qr_token (new column or pre-existing rows).
 const backfill = db.prepare(`UPDATE containers SET qr_token = ? WHERE id = ? AND qr_token IS NULL`);
