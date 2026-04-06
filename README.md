@@ -87,6 +87,20 @@ The installed app opens full-screen with no browser chrome, and its static asset
 
 ---
 
+## Printing QR labels
+
+Each container has a QR code that links directly to it. To print a physical label:
+
+1. Open a container and tap the QR icon (⊞) in the header.
+2. Click **Print QR** — this opens `/print/container/:token` in a new tab.
+3. The print dialog opens automatically. The page shows only the QR code, container name, and location — nothing else.
+
+The printed label is scannable with any phone camera. Scanning redirects to the container page with the **Add Item** form pre-opened.
+
+> **Local network:** QR codes must encode your machine's LAN IP, not `localhost`. See the [configuration note above](#2-configure-environment-optional) for `VITE_PUBLIC_BASE_URL`.
+
+---
+
 ## Development mode (two processes)
 
 When actively working on the frontend, run the Vite dev server alongside the backend for hot module replacement:
