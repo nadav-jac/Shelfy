@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import Modal from '../components/Modal.jsx';
+import { usePullToRefresh } from '../hooks/usePullToRefresh.js';
 
-const CONTAINER_WORD = { 0: 'containers', 1: 'container' };
 function pluralize(n, word) { return `${n} ${n === 1 ? word : word + 's'}`; }
 
 function LocationForm({ initial, onSubmit, onClose }) {
@@ -84,35 +84,95 @@ function PlusIcon() {
   );
 }
 
+function RefreshIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 4 23 10 17 10"/>
+      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+    </svg>
+  );
+}
+
+function PullIndicator({ pullDistance, refreshing }) {
+  const THRESHOLD = 60;
+  const visible = pullDistance > 4 || refreshing;
+  if (!visible) return null;
+
+  const progress = Math.min(pullDistance / THRESHOLD, 1);
+  const arrowRotation = progress * 180;
+  const translateY = refreshing ? 12 : Math.min(pullDistance, THRESHOLD) * 0.6;
+
+  return (
+    <div
+      className={`pull-indicator${refreshing ? ' refreshing' : ' pulling'}`}
+      style={{ marginTop: translateY }}
+    >
+      {refreshing ? (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" opacity="0.25"/>
+          <path d="M12 2a10 10 0 0 1 10 10"/>
+        </svg>
+      ) : (
+        <svg
+          width="16" height="16" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+          style={{ transform: `rotate(${arrowRotation}deg)`, color: 'var(--primary)' }}
+        >
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <polyline points="19 12 12 19 5 12"/>
+        </svg>
+      )}
+    </div>
+  );
+}
+
 export default function LocationsPage() {
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
-  const [modal, setModal] = useState(null); // null | 'add' | { edit: location }
+  const [modal, setModal] = useState(null);
+  const fetchingRef = useRef(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ silent = false } = {}) => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    if (silent) setRefreshing(true);
+    else setLoading(true);
     try {
       const data = await api.locations.list();
       setLocations(data);
+      setError('');
     } catch (err) {
       setError(err.message);
     } finally {
+      fetchingRef.current = false;
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    function onVisibilityChange() {
+      if (document.visibilityState === 'visible') load({ silent: true });
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [load]);
+
+  const refresh = useCallback(() => load({ silent: true }), [load]);
+  const pullDistance = usePullToRefresh(refresh);
+
   async function handleCreate(data) {
-    const created = await api.locations.create(data);
-    setLocations((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+    await api.locations.create(data);
+    load({ silent: true });
   }
 
   async function handleUpdate(id, data) {
-    const updated = await api.locations.update(id, data);
-    setLocations((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, ...updated } : l))
-    );
+    await api.locations.update(id, data);
+    load({ silent: true });
   }
 
   async function handleDelete(location) {
@@ -121,13 +181,15 @@ export default function LocationsPage() {
       : `Delete "${location.name}"?`;
     if (!confirm(msg)) return;
     await api.locations.delete(location.id);
-    setLocations((prev) => prev.filter((l) => l.id !== location.id));
+    load({ silent: true });
   }
 
   if (loading) return <div className="loading">Loading…</div>;
 
   return (
     <main className="page">
+      <PullIndicator pullDistance={pullDistance} refreshing={refreshing} />
+
       {error && <div className="error-banner">{error}</div>}
 
       <div className="page-header">
@@ -135,9 +197,19 @@ export default function LocationsPage() {
           <h1>My Locations</h1>
           <p>Rooms, areas, and places where things are stored</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setModal('add')}>
-          <PlusIcon /> Add Location
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            className={`btn btn-ghost btn-icon btn-refresh${refreshing ? ' spinning' : ''}`}
+            onClick={refresh}
+            title="Refresh"
+            aria-label="Refresh"
+          >
+            <RefreshIcon />
+          </button>
+          <button className="btn btn-primary" onClick={() => setModal('add')}>
+            <PlusIcon /> Add Location
+          </button>
+        </div>
       </div>
 
       {locations.length === 0 ? (
