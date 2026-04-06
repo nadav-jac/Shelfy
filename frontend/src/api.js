@@ -23,6 +23,7 @@ export const api = {
   },
   containers: {
     get: (id) => request(`/containers/${id}`),
+    getByToken: (token) => request(`/containers/qr/${token}`),
     create: (data) => request('/containers', { method: 'POST', body: JSON.stringify(data) }),
     update: (id, data) => request(`/containers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id) => request(`/containers/${id}`, { method: 'DELETE' }),
