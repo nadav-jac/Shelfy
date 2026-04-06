@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useLocation, Link } from 'react-router-dom';
-import { QRCodeSVG } from 'qrcode.react';
+import ContainerQRCode from '../components/ContainerQRCode.jsx';
 import { api } from '../api.js';
 import Modal from '../components/Modal.jsx';
 import { usePullToRefresh } from '../hooks/usePullToRefresh.js';
@@ -375,15 +375,16 @@ export default function ContainerDetailPage() {
       {modal === 'qr' && (
         <Modal title={`QR — ${container.name}`} onClose={() => setModal(null)}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-            <QRCodeSVG
-              value={`${import.meta.env.VITE_PUBLIC_BASE_URL || window.location.origin}/scan/container/${container.qr_token}`}
-              size={220}
-              marginSize={2}
-            />
+            <ContainerQRCode token={container.qr_token} />
             <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>
               Scan to open and add items to this container.
             </p>
-            <button className="btn btn-ghost" onClick={() => window.print()}>Print</button>
+            <button
+              className="btn btn-ghost"
+              onClick={() => window.open(`/print/container/${container.qr_token}`, '_blank')}
+            >
+              Print QR
+            </button>
           </div>
         </Modal>
       )}
