@@ -60,6 +60,49 @@ describe('GET /api/containers/:id', () => {
   });
 });
 
+// ─── GET /api/containers/qr/:token ──────────────────────────────────────────
+
+describe('GET /api/containers/qr/:token', () => {
+  it('returns 404 for an invalid token', async () => {
+    const res = await request(app).get('/api/containers/qr/doesnotexist');
+    expect(res.status).toBe(404);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('returns container with location_name and items array', async () => {
+    const created = (await createContainer({ name: 'Tool Box' })).body;
+
+    const res = await request(app).get(`/api/containers/qr/${created.qr_token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe(created.id);
+    expect(res.body.name).toBe('Tool Box');
+    expect(res.body.location_name).toBe('Test Room');
+    expect(res.body.items).toEqual([]);
+  });
+
+  it('includes items sorted alphabetically', async () => {
+    const container = (await createContainer()).body;
+
+    await request(app).post('/api/items').send({ name: 'Zebra', container_id: container.id });
+    await request(app).post('/api/items').send({ name: 'Apple', container_id: container.id });
+
+    const res = await request(app).get(`/api/containers/qr/${container.qr_token}`);
+    expect(res.body.items).toHaveLength(2);
+    expect(res.body.items[0].name).toBe('Apple');
+    expect(res.body.items[1].name).toBe('Zebra');
+  });
+
+  it('items are linked to the correct container', async () => {
+    const a = (await createContainer({ name: 'Container A' })).body;
+    const b = (await createContainer({ name: 'Container B' })).body;
+
+    await request(app).post('/api/items').send({ name: 'Item in A', container_id: a.id });
+
+    const res = await request(app).get(`/api/containers/qr/${b.qr_token}`);
+    expect(res.body.items).toHaveLength(0);
+  });
+});
+
 // ─── POST /api/containers ────────────────────────────────────────────────────
 
 describe('POST /api/containers', () => {

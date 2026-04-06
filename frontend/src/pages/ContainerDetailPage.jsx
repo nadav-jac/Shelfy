@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useLocation, Link } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import { api } from '../api.js';
 import Modal from '../components/Modal.jsx';
 import { usePullToRefresh } from '../hooks/usePullToRefresh.js';
@@ -102,6 +103,20 @@ function EditIcon() {
   );
 }
 
+function QrIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+      <rect x="3" y="14" width="7" height="7"/>
+      <line x1="14" y1="14" x2="14" y2="14"/><line x1="17" y1="14" x2="17" y2="14"/>
+      <line x1="20" y1="14" x2="20" y2="14"/><line x1="14" y1="17" x2="14" y2="17"/>
+      <line x1="17" y1="17" x2="17" y2="17"/><line x1="20" y1="17" x2="20" y2="17"/>
+      <line x1="14" y1="20" x2="14" y2="20"/><line x1="17" y1="20" x2="17" y2="20"/>
+      <line x1="20" y1="20" x2="20" y2="20"/>
+    </svg>
+  );
+}
+
 function RefreshIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -156,11 +171,12 @@ function PullIndicator({ pullDistance, refreshing }) {
 
 export default function ContainerDetailPage() {
   const { id } = useParams();
+  const { state: navState } = useLocation();
   const [container, setContainer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
-  const [modal, setModal] = useState(null);
+  const [modal, setModal] = useState(navState?.openAdd ? 'add' : null);
   const [search, setSearch] = useState('');
   const fetchingRef = useRef(false);
 
@@ -254,6 +270,9 @@ export default function ContainerDetailPage() {
             aria-label="Refresh"
           >
             <RefreshIcon />
+          </button>
+          <button className="btn btn-ghost btn-icon" onClick={() => setModal('qr')} title="Show QR" aria-label="Show QR">
+            <QrIcon />
           </button>
           <button className="btn btn-primary" onClick={() => setModal('add')}>
             <PlusIcon /> Add Item
@@ -350,6 +369,22 @@ export default function ContainerDetailPage() {
             onSubmit={(data) => handleUpdate(modal.edit.id, data)}
             onClose={() => setModal(null)}
           />
+        </Modal>
+      )}
+
+      {modal === 'qr' && (
+        <Modal title={`QR — ${container.name}`} onClose={() => setModal(null)}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+            <QRCodeSVG
+              value={`${window.location.origin}/scan/container/${container.qr_token}`}
+              size={220}
+              marginSize={2}
+            />
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>
+              Scan to open and add items to this container.
+            </p>
+            <button className="btn btn-ghost" onClick={() => window.print()}>Print</button>
+          </div>
         </Modal>
       )}
     </main>
