@@ -1,65 +1,67 @@
-const router = require('express').Router();
-const db = require('../db');
+const { Router } = require('express');
 
-// Get single container with its items
-router.get('/:id', (req, res) => {
-  const container = db.prepare(`
-    SELECT c.*, l.name AS location_name
-    FROM containers c
-    JOIN locations l ON l.id = c.location_id
-    WHERE c.id = ?
-  `).get(req.params.id);
-  if (!container) return res.status(404).json({ error: 'Container not found' });
-
-  const items = db.prepare(`
-    SELECT * FROM items WHERE container_id = ? ORDER BY name COLLATE NOCASE
-  `).all(req.params.id);
-
-  res.json({ ...container, items });
-});
-
-// Create container
-router.post('/', (req, res) => {
-  const { name, type, description, location_id } = req.body;
-  if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
-  if (!location_id) return res.status(400).json({ error: 'location_id is required' });
-
+module.exports = function containersRouter(db) {
+  const router = Router();
   const validTypes = ['cabinet', 'shelf', 'box', 'drawer', 'bag', 'other'];
-  const containerType = validTypes.includes(type) ? type : 'box';
 
-  const result = db.prepare(
-    'INSERT INTO containers (name, type, description, location_id) VALUES (?, ?, ?, ?)'
-  ).run(name.trim(), containerType, (description || '').trim(), location_id);
+  // Get single container with its items
+  router.get('/:id', (req, res) => {
+    const container = db.prepare(`
+      SELECT c.*, l.name AS location_name
+      FROM containers c
+      JOIN locations l ON l.id = c.location_id
+      WHERE c.id = ?
+    `).get(req.params.id);
+    if (!container) return res.status(404).json({ error: 'Container not found' });
 
-  res.status(201).json({
-    id: result.lastInsertRowid,
-    name: name.trim(),
-    type: containerType,
-    description: (description || '').trim(),
-    location_id,
-    item_count: 0,
+    const items = db.prepare(`
+      SELECT * FROM items WHERE container_id = ? ORDER BY name COLLATE NOCASE
+    `).all(req.params.id);
+
+    res.json({ ...container, items });
   });
-});
 
-// Update container
-router.put('/:id', (req, res) => {
-  const { name, type, description } = req.body;
-  if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
+  // Create container
+  router.post('/', (req, res) => {
+    const { name, type, description, location_id } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
+    if (!location_id) return res.status(400).json({ error: 'location_id is required' });
 
-  const validTypes = ['cabinet', 'shelf', 'box', 'drawer', 'bag', 'other'];
-  const containerType = validTypes.includes(type) ? type : 'box';
+    const containerType = validTypes.includes(type) ? type : 'box';
 
-  db.prepare(
-    'UPDATE containers SET name = ?, type = ?, description = ? WHERE id = ?'
-  ).run(name.trim(), containerType, (description || '').trim(), req.params.id);
+    const result = db.prepare(
+      'INSERT INTO containers (name, type, description, location_id) VALUES (?, ?, ?, ?)'
+    ).run(name.trim(), containerType, (description || '').trim(), location_id);
 
-  res.json({ id: Number(req.params.id), name: name.trim(), type: containerType, description: (description || '').trim() });
-});
+    res.status(201).json({
+      id: result.lastInsertRowid,
+      name: name.trim(),
+      type: containerType,
+      description: (description || '').trim(),
+      location_id,
+      item_count: 0,
+    });
+  });
 
-// Delete container (cascades to items)
-router.delete('/:id', (req, res) => {
-  db.prepare('DELETE FROM containers WHERE id = ?').run(req.params.id);
-  res.json({ success: true });
-});
+  // Update container
+  router.put('/:id', (req, res) => {
+    const { name, type, description } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
 
-module.exports = router;
+    const containerType = validTypes.includes(type) ? type : 'box';
+
+    db.prepare(
+      'UPDATE containers SET name = ?, type = ?, description = ? WHERE id = ?'
+    ).run(name.trim(), containerType, (description || '').trim(), req.params.id);
+
+    res.json({ id: Number(req.params.id), name: name.trim(), type: containerType, description: (description || '').trim() });
+  });
+
+  // Delete container (cascades to items)
+  router.delete('/:id', (req, res) => {
+    db.prepare('DELETE FROM containers WHERE id = ?').run(req.params.id);
+    res.json({ success: true });
+  });
+
+  return router;
+};
