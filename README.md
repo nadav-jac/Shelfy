@@ -81,9 +81,53 @@ Shelfy is a Progressive Web App. Once the server is running, you can install it 
 3. Scroll down and tap **Add to Home Screen**.
 4. Tap **Add**.
 
-The installed app opens full-screen with no browser chrome, and its static assets (shell, JS, CSS) load instantly from cache even without a network connection. API calls (your data) still require connectivity.
+The installed app opens full-screen with no browser chrome, and its static assets (shell, JS, CSS) load instantly from cache even without a network connection. API calls (your data) still require connectivity — see [Offline support](#offline-support) below.
 
 **Keeping data fresh:** Every page has a **Refresh** button (↻) in the header. Data also auto-refreshes whenever you switch back to the app tab — so changes made on another device appear without any manual action. On mobile, **pull down** from the top of any page to refresh.
+
+---
+
+## Offline support
+
+Shelfy supports offline use for container pages. The app uses IndexedDB to cache data locally and a simple sync queue to replay changes when connectivity returns.
+
+### What works offline
+
+| Action | Offline support |
+|--------|----------------|
+| Open a previously visited container | Yes — loaded from local cache |
+| Add an item to a container | Yes — item appears immediately, syncs when online |
+| Delete an item from a container | Yes — item removed immediately, syncs when online |
+| Search | No — requires server |
+| Browse locations / location detail | No — no cache for those pages |
+| Edit an item | No — network required |
+
+### What is not supported offline
+
+- Containers that have never been opened while online (no cache available)
+- Editing items (shows an error if attempted offline)
+- Search, locations, and all other pages
+
+### How sync works
+
+1. When you open a container online, the full container snapshot (container info + item list) is saved to IndexedDB.
+2. If you add or delete items while offline, the change appears instantly in the UI and a pending mutation is enqueued.
+3. Pending mutations are replayed when:
+   - The device comes back online (automatic, transparent)
+   - The tab becomes visible again (existing refresh behavior, now offline-aware)
+   - You tap **Sync now** from the container page
+4. Mutations are processed in order. A network failure pauses the queue; it will retry on the next trigger. A server-side error (e.g. item already deleted) drops the mutation and continues.
+
+### Create + delete collapse
+
+If you add an item while offline and then delete it before it syncs, Shelfy detects that and removes the pending create from the queue entirely. No unnecessary create/delete pair is sent to the server.
+
+### Indicators
+
+- **Offline bar** — amber banner shown when offline, including "showing cached data" note
+- **Pending changes bar** — blue banner shown when online with unsynced mutations, with a **Sync now** button
+- **Pending badge** — each item added offline is labeled *pending* until it syncs
+- Items added offline show a slightly yellow-tinted card border
 
 ---
 

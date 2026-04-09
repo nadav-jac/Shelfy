@@ -576,6 +576,93 @@ input, textarea, select { font-family: inherit; }
 .btn-refresh svg { display: block; }
 .btn-refresh.spinning svg { animation: spin 0.8s linear infinite; }
 
+/* ─── Offline / sync status bar ─────────────────────────────────────────────── */
+.offline-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 16px;
+  line-height: 1.4;
+}
+
+.offline-bar-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.offline-bar-offline {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.offline-bar-pending {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  border: 1px solid #bfdbfe;
+}
+
+/* Pending item badge — always visible (not hover-dependent) */
+.badge-pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  margin-left: 8px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* Slight visual hint on item cards that have pending changes */
+.item-card-pending {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+/* Make item actions always visible on touch devices */
+@media (hover: none) {
+  .item-actions { opacity: 1; }
+  .card-actions { opacity: 1; }
+}
+
+/* ─── Offline unavailable state ──────────────────────────────────────────────── */
+.offline-unavailable {
+  text-align: center;
+  padding: 64px 24px;
+  color: var(--text-muted);
+}
+
+.offline-unavailable-icon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.offline-unavailable h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.offline-unavailable p {
+  font-size: 0.9rem;
+  max-width: 280px;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
 /* ─── Responsive ────────────────────────────────────────────────────────────── */
 @media (max-width: 600px) {
   .page-header { flex-direction: column; }
