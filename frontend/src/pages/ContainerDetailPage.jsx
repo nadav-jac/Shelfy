@@ -4,6 +4,20 @@ import ContainerQRCode from '../components/ContainerQRCode.jsx';
 import { api } from '../api.js';
 import Modal from '../components/Modal.jsx';
 import { usePullToRefresh } from '../hooks/usePullToRefresh.js';
+import { useOnlineStatus } from '../hooks/useOnlineStatus.js';
+import {
+  getCachedContainer,
+  setCachedContainer,
+  enqueueMutation,
+  getPendingMutationsForContainer,
+  removeMutation,
+  removeCreateMutationForLocalItem,
+  applyPendingMutations,
+  upsertContainerInCatalog,
+} from '../services/offlineDB.js';
+import { syncPendingMutations } from '../services/syncEngine.js';
+
+// ─── Item form ────────────────────────────────────────────────────────────────
 
 function ItemForm({ initial, containerId, onSubmit, onClose }) {
   const [name, setName] = useState(initial?.name || '');
@@ -76,6 +90,8 @@ function ItemForm({ initial, containerId, onSubmit, onClose }) {
   );
 }
 
+// ─── Icons ────────────────────────────────────────────────────────────────────
+
 function PlusIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -135,17 +151,35 @@ function SpinnerIcon() {
   );
 }
 
-// Visual indicator that appears when pulling or refreshing
+function SyncIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21.5 2v6h-6"/>
+      <path d="M2.5 22v-6h6"/>
+      <path d="M22 13A10 10 0 0 1 4.4 16.6"/>
+      <path d="M2 11A10 10 0 0 1 19.6 7.4"/>
+    </svg>
+  );
+}
+
+function PendingIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+      <circle cx="12" cy="12" r="10"/>
+      <polyline points="12 6 12 12 16 14"/>
+    </svg>
+  );
+}
+
+// ─── Pull-to-refresh indicator ────────────────────────────────────────────────
+
 function PullIndicator({ pullDistance, refreshing }) {
   const THRESHOLD = 60;
   const visible = pullDistance > 4 || refreshing;
   if (!visible) return null;
 
-  // Rotate the arrow 0→180° as the pull approaches threshold
   const progress = Math.min(pullDistance / THRESHOLD, 1);
   const arrowRotation = progress * 180;
-
-  // Position: emerge from just below the navbar as the user pulls
   const translateY = refreshing ? 12 : Math.min(pullDistance, THRESHOLD) * 0.6;
 
   return (
@@ -169,25 +203,127 @@ function PullIndicator({ pullDistance, refreshing }) {
   );
 }
 
+// ─── Status bar (offline / pending sync) ─────────────────────────────────────
+
+function StatusBar({ isOnline, fromCache, pendingCount, syncing, onSync }) {
+  if (syncing) {
+    return (
+      <div className="offline-bar offline-bar-pending" role="status" aria-live="polite">
+        <span className="offline-bar-icon"><SpinnerIcon /></span>
+        <span>Syncing changes…</span>
+      </div>
+    );
+  }
+
+  if (!isOnline) {
+    return (
+      <div className="offline-bar offline-bar-offline" role="status" aria-live="polite">
+        <span className="offline-bar-icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+            <line x1="1" y1="1" x2="23" y2="23"/>
+            <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/>
+            <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/>
+            <path d="M10.71 5.05A16 16 0 0 1 22.56 9"/>
+            <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/>
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+            <line x1="12" y1="20" x2="12.01" y2="20"/>
+          </svg>
+        </span>
+        <span>Offline{fromCache ? ' — showing cached data' : ''}</span>
+      </div>
+    );
+  }
+
+  if (pendingCount > 0) {
+    return (
+      <div className="offline-bar offline-bar-pending" role="status" aria-live="polite">
+        <span className="offline-bar-icon"><SyncIcon /></span>
+        <span>{pendingCount} pending change{pendingCount !== 1 ? 's' : ''}</span>
+        <button className="btn btn-sm btn-ghost" onClick={onSync} style={{ marginLeft: 'auto' }}>
+          Sync now
+        </button>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+// ─── Page component ───────────────────────────────────────────────────────────
+
 export default function ContainerDetailPage() {
   const { id } = useParams();
   const { state: navState } = useLocation();
+  const isOnline = useOnlineStatus();
+
   const [container, setContainer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [modal, setModal] = useState(navState?.openAdd ? 'add' : null);
   const [search, setSearch] = useState('');
+  const [fromCache, setFromCache] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+
   const fetchingRef = useRef(false);
+  const syncingRef = useRef(false);
+
+  // ─── Load ───────────────────────────────────────────────────────────────────
 
   const load = useCallback(async ({ silent = false } = {}) => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
     if (silent) setRefreshing(true);
     else setLoading(true);
+
+    let cacheMode = false;
+
     try {
-      const data = await api.containers.get(id);
-      setContainer(data);
+      let data;
+
+      if (navigator.onLine) {
+        try {
+          data = await api.containers.get(id);
+          // Cache the clean server snapshot (no pending items mixed in)
+          await setCachedContainer(data);
+          // Keep the catalog up-to-date for offline QR resolution (best-effort)
+          upsertContainerInCatalog({
+            qr_token: data.qr_token,
+            id: data.id,
+            name: data.name,
+            type: data.type,
+            location_id: data.location_id,
+            location_name: data.location_name,
+          }).catch(() => {});
+        } catch (fetchErr) {
+          // Went offline during the request — fall back to cache
+          const cached = await getCachedContainer(Number(id));
+          if (cached) {
+            data = cached;
+            cacheMode = true;
+          } else {
+            throw fetchErr;
+          }
+        }
+      } else {
+        const cached = await getCachedContainer(Number(id));
+        if (cached) {
+          data = cached;
+          cacheMode = true;
+        } else {
+          setError('offline-unavailable');
+          return;
+        }
+      }
+
+      // Merge any pending offline mutations on top of the snapshot
+      const pending = await getPendingMutationsForContainer(Number(id));
+      const mergedItems = applyPendingMutations(data.items, pending);
+
+      setContainer({ ...data, items: mergedItems });
+      setPendingCount(pending.length);
+      setFromCache(cacheMode);
       setError('');
     } catch (err) {
       setError(err.message);
@@ -201,7 +337,7 @@ export default function ContainerDetailPage() {
   // Initial load
   useEffect(() => { load(); }, [load]);
 
-  // Refetch when the tab/window regains focus (keeps data fresh across devices)
+  // Refetch when the tab/window regains focus
   useEffect(() => {
     function onVisibilityChange() {
       if (document.visibilityState === 'visible') load({ silent: true });
@@ -210,26 +346,125 @@ export default function ContainerDetailPage() {
     return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, [load]);
 
+  // Auto-sync + reload when connectivity is restored
+  useEffect(() => {
+    async function onOnline() {
+      await syncPendingMutations();
+      load({ silent: true });
+    }
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+  }, [load]);
+
+  // ─── Pull-to-refresh ────────────────────────────────────────────────────────
+
   const refresh = useCallback(() => load({ silent: true }), [load]);
   const pullDistance = usePullToRefresh(refresh);
 
+  // ─── Manual sync ────────────────────────────────────────────────────────────
+
+  const handleSync = useCallback(async () => {
+    if (!navigator.onLine || syncingRef.current) return;
+    syncingRef.current = true;
+    setSyncing(true);
+    try {
+      await syncPendingMutations();
+      await load({ silent: true });
+    } finally {
+      syncingRef.current = false;
+      setSyncing(false);
+    }
+  }, [load]);
+
+  // ─── Item actions ────────────────────────────────────────────────────────────
+
   async function handleCreate(data) {
-    await api.items.create(data);
-    load({ silent: true });
+    if (navigator.onLine) {
+      await api.items.create(data);
+      load({ silent: true });
+    } else {
+      // Offline path: optimistic insert with temporary id
+      const localItemId = `local_${Date.now()}`;
+      const localItem = {
+        id: localItemId,
+        name: data.name.trim(),
+        description: (data.description || '').trim(),
+        quantity: Number(data.quantity) > 0 ? Number(data.quantity) : 1,
+        tags: (data.tags || '').trim(),
+        container_id: Number(id),
+        _pending: true,
+      };
+
+      await enqueueMutation({
+        type: 'create_item',
+        containerId: Number(id),
+        localItemId,
+        itemData: {
+          name: localItem.name,
+          description: localItem.description,
+          quantity: localItem.quantity,
+          tags: localItem.tags,
+          container_id: localItem.container_id,
+        },
+      });
+
+      setContainer((prev) => ({ ...prev, items: [...prev.items, localItem] }));
+      setPendingCount((c) => c + 1);
+    }
   }
 
   async function handleUpdate(itemId, data) {
+    // Edit is online-only — the form will surface the network error if offline
     await api.items.update(itemId, data);
     load({ silent: true });
   }
 
   async function handleDelete(item) {
     if (!confirm(`Delete "${item.name}"?`)) return;
-    await api.items.delete(item.id);
-    load({ silent: true });
+
+    if (navigator.onLine) {
+      await api.items.delete(item.id);
+      load({ silent: true });
+    } else {
+      const isLocal = String(item.id).startsWith('local_');
+
+      if (isLocal) {
+        // Offline-created item deleted before it synced — collapse into a no-op
+        const removed = await removeCreateMutationForLocalItem(item.id);
+        if (removed) setPendingCount((c) => c - 1);
+      } else {
+        // Real server item — queue a delete for when we reconnect
+        await enqueueMutation({
+          type: 'delete_item',
+          containerId: Number(id),
+          itemId: item.id,
+        });
+        setPendingCount((c) => c + 1);
+      }
+
+      setContainer((prev) => ({
+        ...prev,
+        items: prev.items.filter((i) => i.id !== item.id),
+      }));
+    }
   }
 
+  // ─── Render ─────────────────────────────────────────────────────────────────
+
   if (loading) return <div className="loading">Loading…</div>;
+
+  if (error === 'offline-unavailable') {
+    return (
+      <div className="page">
+        <div className="offline-unavailable">
+          <div className="offline-unavailable-icon">📡</div>
+          <h3>Not available offline</h3>
+          <p>This container hasn't been loaded before. Connect to a network to open it.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (error) return <div className="page"><div className="error-banner">{error}</div></div>;
   if (!container) return null;
 
@@ -280,6 +515,14 @@ export default function ContainerDetailPage() {
         </div>
       </div>
 
+      <StatusBar
+        isOnline={isOnline}
+        fromCache={fromCache}
+        pendingCount={pendingCount}
+        syncing={syncing}
+        onSync={handleSync}
+      />
+
       {container.items.length > 4 && (
         <div className="search-bar" style={{ marginBottom: 16 }}>
           <SearchMiniIcon />
@@ -317,9 +560,16 @@ export default function ContainerDetailPage() {
       ) : (
         <div className="item-list">
           {filteredItems.map((item) => (
-            <div key={item.id} className="item-card">
+            <div key={item.id} className={`item-card${item._pending ? ' item-card-pending' : ''}`}>
               <div className="item-info">
-                <div className="item-name">{item.name}</div>
+                <div className="item-name">
+                  {item.name}
+                  {item._pending && (
+                    <span className="badge-pending" title="Waiting to sync">
+                      <PendingIcon /> pending
+                    </span>
+                  )}
+                </div>
                 {item.description && <div className="item-desc">{item.description}</div>}
                 {item.tags && (
                   <div className="item-tags">
@@ -331,13 +581,15 @@ export default function ContainerDetailPage() {
               </div>
               <div className="qty-badge">x{item.quantity}</div>
               <div className="item-actions">
-                <button
-                  className="btn btn-ghost btn-sm btn-icon"
-                  title="Edit"
-                  onClick={() => setModal({ edit: item })}
-                >
-                  <EditIcon />
-                </button>
+                {!item._pending && (
+                  <button
+                    className="btn btn-ghost btn-sm btn-icon"
+                    title="Edit"
+                    onClick={() => setModal({ edit: item })}
+                  >
+                    <EditIcon />
+                  </button>
+                )}
                 <button
                   className="btn btn-danger btn-sm btn-icon"
                   title="Delete"

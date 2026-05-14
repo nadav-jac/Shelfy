@@ -1,0 +1,9 @@
+backend/node_modules
+backend/shelfy.db
+backend/shelfy.db-shm
+backend/shelfy.db-wal
+frontend/node_modules
+frontend/dist
+.env
+.git
+*.md
