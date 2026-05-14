@@ -81,9 +81,53 @@ Shelfy is a Progressive Web App. Once the server is running, you can install it 
 3. Scroll down and tap **Add to Home Screen**.
 4. Tap **Add**.
 
-The installed app opens full-screen with no browser chrome, and its static assets (shell, JS, CSS) load instantly from cache even without a network connection. API calls (your data) still require connectivity.
+The installed app opens full-screen with no browser chrome, and its static assets (shell, JS, CSS) load instantly from cache even without a network connection. API calls (your data) still require connectivity — see [Offline support](#offline-support) below.
 
 **Keeping data fresh:** Every page has a **Refresh** button (↻) in the header. Data also auto-refreshes whenever you switch back to the app tab — so changes made on another device appear without any manual action. On mobile, **pull down** from the top of any page to refresh.
+
+---
+
+## Offline support
+
+Shelfy supports offline use for container pages. The app uses IndexedDB to cache data locally and a simple sync queue to replay changes when connectivity returns.
+
+### What works offline
+
+| Action | Offline support |
+|--------|----------------|
+| Open a previously visited container | Yes — loaded from local cache |
+| Add an item to a container | Yes — item appears immediately, syncs when online |
+| Delete an item from a container | Yes — item removed immediately, syncs when online |
+| Search | No — requires server |
+| Browse locations / location detail | No — no cache for those pages |
+| Edit an item | No — network required |
+
+### What is not supported offline
+
+- Containers that have never been opened while online (no cache available)
+- Editing items (shows an error if attempted offline)
+- Search, locations, and all other pages
+
+### How sync works
+
+1. When you open a container online, the full container snapshot (container info + item list) is saved to IndexedDB.
+2. If you add or delete items while offline, the change appears instantly in the UI and a pending mutation is enqueued.
+3. Pending mutations are replayed when:
+   - The device comes back online (automatic, transparent)
+   - The tab becomes visible again (existing refresh behavior, now offline-aware)
+   - You tap **Sync now** from the container page
+4. Mutations are processed in order. A network failure pauses the queue; it will retry on the next trigger. A server-side error (e.g. item already deleted) drops the mutation and continues.
+
+### Create + delete collapse
+
+If you add an item while offline and then delete it before it syncs, Shelfy detects that and removes the pending create from the queue entirely. No unnecessary create/delete pair is sent to the server.
+
+### Indicators
+
+- **Offline bar** — amber banner shown when offline, including "showing cached data" note
+- **Pending changes bar** — blue banner shown when online with unsynced mutations, with a **Sync now** button
+- **Pending badge** — each item added offline is labeled *pending* until it syncs
+- Items added offline show a slightly yellow-tinted card border
 
 ---
 
@@ -126,6 +170,105 @@ Open **http://localhost:5173**.
 | `npm start`   | Starts the Express server (serves API + built UI)   |
 | `npm run dev:api` | Starts the backend with nodemon (auto-reload)   |
 | `npm run dev:ui`  | Starts the Vite dev server with HMR              |
+
+---
+
+## Running as a Home Assistant Add-on
+
+Shelfy can run as a native Home Assistant Add-on on Home Assistant OS / Supervised installs (e.g. Home Assistant Green).
+
+### How it works
+
+- The add-on builds a Docker image from this repository using the `Dockerfile` at the repo root.
+- The Express server runs inside the container on port **43127**, which Home Assistant forwards to the same port on your network.
+- The SQLite database is stored in `/data/shelfy.db` inside the container, which Home Assistant maps to a **persistent volume** — your data survives add-on updates and container restarts.
+- QR codes automatically use whatever URL you use to access Shelfy (they fall back to `window.location.origin`), so scanning always works with your HA address.
+
+---
+
+### Installation (local add-on via SSH/Samba)
+
+This is the simplest path for a self-hosted repo.
+
+**1. Copy the repo to your Home Assistant device**
+
+You need the Shelfy source files on your HA device. The easiest approach is via the **Samba share** add-on:
+
+```
+\\homeassistant\config\addons\local\shelfy\   ← copy repo contents here
+```
+
+Or via SSH (install the SSH add-on first):
+
+```bash
+# from your dev machine
+scp -r /path/to/Shelfy root@homeassistant:/config/addons/local/shelfy
+```
+
+The folder must contain at minimum: `Dockerfile`, `config.yaml`, `build.yaml`, `run.sh`, `backend/`, `frontend/`.
+
+**2. Reload add-ons**
+
+In Home Assistant → **Settings → Add-ons → Add-on Store** → click the three-dot menu → **Reload**.
+
+**3. Find and install Shelfy**
+
+Scroll to the bottom of the Add-on Store. Under **Local add-ons** you should see **Shelfy**. Click it → **Install**.
+
+Home Assistant will build the Docker image (this takes a few minutes the first time — `better-sqlite3` compiles from source for your CPU architecture).
+
+**4. Start the add-on**
+
+Once installed, click **Start**. Optionally enable **Start on boot** and **Watchdog**.
+
+---
+
+### Accessing the UI
+
+After the add-on is running, open:
+
+```
+http://homeassistant.local:43127
+```
+
+or use your HA device's IP address:
+
+```
+http://<ha-ip>:43127
+```
+
+You can also bookmark it on your phone and install it as a PWA (see [Installing on mobile](#installing-on-mobile-pwa)).
+
+---
+
+### Where data is stored
+
+The SQLite database is at `/data/shelfy.db` inside the add-on container.  
+Home Assistant maps this to a persistent volume on the host, so your data is safe across:
+
+- Add-on updates (re-installs)
+- Container restarts
+- Home Assistant reboots
+
+To back it up manually: use the **Backup** feature in Home Assistant (Settings → System → Backups), which includes add-on data. The database file is also accessible at `/config/addons/data/local_shelfy/shelfy.db` via SSH or Samba if you need to copy it directly.
+
+---
+
+### Installation via GitHub repository (alternative)
+
+If you push this repo to GitHub, you can add it as a proper HA add-on repository:
+
+1. In Home Assistant → **Settings → Add-ons → Add-on Store** → three-dot menu → **Repositories**.
+2. Add your GitHub URL, e.g. `https://github.com/YOUR_USERNAME/Shelfy`.
+3. Shelfy will appear in the store. Install and start it as above.
+
+> **Note:** For the GitHub path, HA fetches and builds directly from the repo. The `config.yaml` at the repo root tells HA this is an add-on repository.
+
+---
+
+### Updating the add-on
+
+After pulling new changes into the local folder (or pushing to GitHub), go to the add-on page in HA and click **Update**. HA rebuilds the image with the new code. Your data in `/data/shelfy.db` is untouched.
 
 ---
 
