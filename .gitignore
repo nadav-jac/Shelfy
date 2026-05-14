@@ -1,4 +1,13 @@
 node_modules/
 frontend/dist/
+
+# SQLite database and WAL/SHM sidecar files
 backend/shelfy.db
+backend/shelfy.db-wal
+backend/shelfy.db-shm
+
+# Environment variables (may contain private IPs or secrets)
 .env
+
+# macOS metadata
+.DS_Store
