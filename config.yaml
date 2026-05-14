@@ -17,7 +17,10 @@ boot: auto
 ports:
   43127/tcp: 43127
 ports_description:
-  43127/tcp: "Shelfy Web UI"
+  43127/tcp: "Shelfy Web UI (direct access)"
+
+ingress: true
+ingress_port: 43127
 
 # /data is Home Assistant's persistent storage directory for add-ons.
 # The SQLite database is stored here so it survives container rebuilds.
