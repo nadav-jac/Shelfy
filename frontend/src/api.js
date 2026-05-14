@@ -1,4 +1,6 @@
-const BASE = '/api';
+// Prefix API calls with the ingress base path so they work both locally and
+// behind Home Assistant ingress. window.__BASE__ is injected by the server.
+const BASE = (window.__BASE__ || '') + '/api';
 
 async function request(path, options = {}) {
   const res = await fetch(`${BASE}${path}`, {
