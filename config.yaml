@@ -1,6 +1,6 @@
 name: "Shelfy"
 description: "Personal home storage manager — track what's in your cabinets and find it fast."
-version: "1.1.0"
+version: "1.2.0"
 slug: "shelfy"
 
 # No S6-overlay init scripts needed; run.sh starts the process directly.
