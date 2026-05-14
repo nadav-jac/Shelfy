@@ -7,9 +7,11 @@ const createApp = require('./app');
 
 const app = createApp(db);
 
-// Serve the built frontend
+// Serve the built frontend static assets (JS, CSS, icons, etc.)
+// index: false ensures index.html is never served directly here —
+// it always goes through the catch-all below so window.__BASE__ gets injected.
 const distPath = path.join(__dirname, '../frontend/dist');
-app.use(require('express').static(distPath));
+app.use(require('express').static(distPath, { index: false }));
 
 // Catch-all: let React Router handle client-side routes.
 // Inject window.__BASE__ so the frontend can adapt to Home Assistant ingress.
