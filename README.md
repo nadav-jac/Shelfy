@@ -225,19 +225,29 @@ Once installed, click **Start**. Optionally enable **Start on boot** and **Watch
 
 ### Accessing the UI
 
-After the add-on is running, open:
+**Via Home Assistant ingress (recommended):**
+
+After the add-on starts, an **Open Web UI** button appears on the add-on panel in Home Assistant. Click it. The URL will look like:
+
+```
+http://homeassistant.local/api/hassio_ingress/<token>/
+```
+
+This path also works remotely through **Nabu Casa** without any port-forwarding — use your `https://your-instance.ui.nabu.casa/api/hassio_ingress/<token>/` URL.
+
+**Via direct port (local only):**
 
 ```
 http://homeassistant.local:43127
 ```
 
-or use your HA device's IP address:
+or:
 
 ```
 http://<ha-ip>:43127
 ```
 
-You can also bookmark it on your phone and install it as a PWA (see [Installing on mobile](#installing-on-mobile-pwa)).
+Direct port access is useful for local bookmarks and PWA installation on mobile (see [Installing on mobile](#installing-on-mobile-pwa)). It does not work through Nabu Casa remote access.
 
 ---
 

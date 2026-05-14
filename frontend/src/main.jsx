@@ -4,9 +4,14 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App.jsx';
 import './App.css';
 
+// window.__BASE__ is injected by the Express server when running behind
+// Home Assistant ingress (e.g. "/api/hassio_ingress/<token>").
+// Falls back to "/" for direct / local development access.
+const basename = window.__BASE__ || '/';
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={basename}>
       <App />
     </BrowserRouter>
   </StrictMode>
