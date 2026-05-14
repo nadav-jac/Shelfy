@@ -13,6 +13,7 @@ import {
   removeMutation,
   removeCreateMutationForLocalItem,
   applyPendingMutations,
+  upsertContainerInCatalog,
 } from '../services/offlineDB.js';
 import { syncPendingMutations } from '../services/syncEngine.js';
 
@@ -286,6 +287,15 @@ export default function ContainerDetailPage() {
           data = await api.containers.get(id);
           // Cache the clean server snapshot (no pending items mixed in)
           await setCachedContainer(data);
+          // Keep the catalog up-to-date for offline QR resolution (best-effort)
+          upsertContainerInCatalog({
+            qr_token: data.qr_token,
+            id: data.id,
+            name: data.name,
+            type: data.type,
+            location_id: data.location_id,
+            location_name: data.location_name,
+          }).catch(() => {});
         } catch (fetchErr) {
           // Went offline during the request — fall back to cache
           const cached = await getCachedContainer(Number(id));

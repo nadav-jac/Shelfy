@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'shelfy-offline';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let _db = null;
 
@@ -17,12 +17,19 @@ async function getDB() {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
 
     req.onupgradeneeded = ({ target: { result: db } }) => {
+      // v1 stores
       if (!db.objectStoreNames.contains('containers')) {
         db.createObjectStore('containers', { keyPath: 'id' });
       }
       if (!db.objectStoreNames.contains('pendingMutations')) {
         // autoIncrement gives each mutation a stable localId for ordering / removal
         db.createObjectStore('pendingMutations', { keyPath: 'localId', autoIncrement: true });
+      }
+      // v2 stores
+      if (!db.objectStoreNames.contains('containerCatalog')) {
+        // Lightweight catalog for offline QR-token → container-id resolution.
+        // Populated whenever the app loads data that includes container info.
+        db.createObjectStore('containerCatalog', { keyPath: 'qr_token' });
       }
     };
 
@@ -108,6 +115,43 @@ export async function removeCreateMutationForLocalItem(localItemId) {
     return true;
   }
   return false;
+}
+
+// ─── Container catalog (offline QR resolution) ────────────────────────────────
+
+/**
+ * Entry shape: { qr_token, id, name, type, location_id, location_name }
+ * Stored whenever the app fetches data that includes container metadata.
+ */
+export async function upsertContainerInCatalog(entry) {
+  const db = await getDB();
+  const tx = db.transaction('containerCatalog', 'readwrite');
+  return idbRequest(tx.objectStore('containerCatalog').put(entry));
+}
+
+/**
+ * Bulk-upsert an array of catalog entries in a single transaction.
+ * Best-effort: errors are silently swallowed by callers via `.catch(() => {})`.
+ */
+export async function upsertContainersCatalog(entries) {
+  if (!entries || entries.length === 0) return;
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('containerCatalog', 'readwrite');
+    const store = tx.objectStore('containerCatalog');
+    for (const entry of entries) store.put(entry);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+/**
+ * Looks up a container by its qr_token. Returns the catalog entry or undefined.
+ */
+export async function getContainerFromCatalog(qr_token) {
+  const db = await getDB();
+  const tx = db.transaction('containerCatalog', 'readonly');
+  return idbRequest(tx.objectStore('containerCatalog').get(qr_token));
 }
 
 // ─── Merge helper ─────────────────────────────────────────────────────────────

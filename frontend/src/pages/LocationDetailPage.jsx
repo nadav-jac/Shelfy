@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api.js';
+import { upsertContainersCatalog } from '../services/offlineDB.js';
 import Modal from '../components/Modal.jsx';
 import { usePullToRefresh } from '../hooks/usePullToRefresh.js';
 
@@ -201,6 +202,17 @@ export default function LocationDetailPage() {
       const data = await api.locations.get(id);
       setLocation(data);
       setError('');
+      // Populate catalog so containers in this location are scannable offline (best-effort)
+      if (data.containers?.length > 0) {
+        upsertContainersCatalog(data.containers.map((c) => ({
+          qr_token: c.qr_token,
+          id: c.id,
+          name: c.name,
+          type: c.type,
+          location_id: data.id,
+          location_name: data.name,
+        }))).catch(() => {});
+      }
     } catch (err) {
       setError(err.message);
     } finally {

@@ -173,6 +173,105 @@ Open **http://localhost:5173**.
 
 ---
 
+## Running as a Home Assistant Add-on
+
+Shelfy can run as a native Home Assistant Add-on on Home Assistant OS / Supervised installs (e.g. Home Assistant Green).
+
+### How it works
+
+- The add-on builds a Docker image from this repository using the `Dockerfile` at the repo root.
+- The Express server runs inside the container on port **43127**, which Home Assistant forwards to the same port on your network.
+- The SQLite database is stored in `/data/shelfy.db` inside the container, which Home Assistant maps to a **persistent volume** — your data survives add-on updates and container restarts.
+- QR codes automatically use whatever URL you use to access Shelfy (they fall back to `window.location.origin`), so scanning always works with your HA address.
+
+---
+
+### Installation (local add-on via SSH/Samba)
+
+This is the simplest path for a self-hosted repo.
+
+**1. Copy the repo to your Home Assistant device**
+
+You need the Shelfy source files on your HA device. The easiest approach is via the **Samba share** add-on:
+
+```
+\\homeassistant\config\addons\local\shelfy\   ← copy repo contents here
+```
+
+Or via SSH (install the SSH add-on first):
+
+```bash
+# from your dev machine
+scp -r /path/to/Shelfy root@homeassistant:/config/addons/local/shelfy
+```
+
+The folder must contain at minimum: `Dockerfile`, `config.yaml`, `build.yaml`, `run.sh`, `backend/`, `frontend/`.
+
+**2. Reload add-ons**
+
+In Home Assistant → **Settings → Add-ons → Add-on Store** → click the three-dot menu → **Reload**.
+
+**3. Find and install Shelfy**
+
+Scroll to the bottom of the Add-on Store. Under **Local add-ons** you should see **Shelfy**. Click it → **Install**.
+
+Home Assistant will build the Docker image (this takes a few minutes the first time — `better-sqlite3` compiles from source for your CPU architecture).
+
+**4. Start the add-on**
+
+Once installed, click **Start**. Optionally enable **Start on boot** and **Watchdog**.
+
+---
+
+### Accessing the UI
+
+After the add-on is running, open:
+
+```
+http://homeassistant.local:43127
+```
+
+or use your HA device's IP address:
+
+```
+http://<ha-ip>:43127
+```
+
+You can also bookmark it on your phone and install it as a PWA (see [Installing on mobile](#installing-on-mobile-pwa)).
+
+---
+
+### Where data is stored
+
+The SQLite database is at `/data/shelfy.db` inside the add-on container.  
+Home Assistant maps this to a persistent volume on the host, so your data is safe across:
+
+- Add-on updates (re-installs)
+- Container restarts
+- Home Assistant reboots
+
+To back it up manually: use the **Backup** feature in Home Assistant (Settings → System → Backups), which includes add-on data. The database file is also accessible at `/config/addons/data/local_shelfy/shelfy.db` via SSH or Samba if you need to copy it directly.
+
+---
+
+### Installation via GitHub repository (alternative)
+
+If you push this repo to GitHub, you can add it as a proper HA add-on repository:
+
+1. In Home Assistant → **Settings → Add-ons → Add-on Store** → three-dot menu → **Repositories**.
+2. Add your GitHub URL, e.g. `https://github.com/YOUR_USERNAME/Shelfy`.
+3. Shelfy will appear in the store. Install and start it as above.
+
+> **Note:** For the GitHub path, HA fetches and builds directly from the repo. The `config.yaml` at the repo root tells HA this is an add-on repository.
+
+---
+
+### Updating the add-on
+
+After pulling new changes into the local folder (or pushing to GitHub), go to the add-on page in HA and click **Update**. HA rebuilds the image with the new code. Your data in `/data/shelfy.db` is untouched.
+
+---
+
 ## API reference
 
 | Method | Endpoint            | Description                               |
