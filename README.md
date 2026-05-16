@@ -4,11 +4,11 @@ A simple home storage manager. Track what's in your cabinets, shelves, and boxes
 
 ## Stack
 
-| Layer    | Tech                                         |
-|----------|----------------------------------------------|
-| Frontend | React 18 + Vite + React Router v6 + PWA      |
-| Backend  | Node.js + Express                            |
-| Database | SQLite (via `better-sqlite3`)                |
+| Layer    | Tech                                    |
+|----------|-----------------------------------------|
+| Frontend | React 18 + Vite + React Router v6 + PWA |
+| Backend  | Node.js + Express                       |
+| Database | SQLite (via `better-sqlite3`)           |
 
 ## Data model
 
@@ -20,7 +20,59 @@ Locations  (rooms, areas)
 
 ---
 
-## Running the app
+## Running on Home Assistant (recommended)
+
+Shelfy runs as a native Home Assistant Add-on on Home Assistant OS / Supervised installs (e.g. Home Assistant Green). This is the recommended way to run it — the add-on handles everything automatically and keeps the app always available on your home network.
+
+### Install from GitHub
+
+1. In Home Assistant → **Settings → Add-ons → Add-on Store** → three-dot menu (⋮) → **Repositories**
+2. Add: `https://github.com/nadav-jac/Shelfy`
+3. Scroll to the bottom of the store — **Shelfy** appears under the new repository
+4. Click **Install** — HA builds the Docker image (takes a few minutes the first time; `better-sqlite3` compiles from source for your CPU architecture)
+5. Click **Start**. Enable **Start on boot** and **Watchdog** if you want it always available.
+
+### Accessing the UI
+
+**Via Home Assistant ingress:**
+
+Once the add-on is running, click **Open Web UI** on the add-on page. The URL looks like:
+
+```
+http://homeassistant.local/api/hassio_ingress/<token>/
+```
+
+Shelfy also appears in the HA sidebar (enable the **Show in sidebar** toggle on the add-on page).
+
+**Via Nabu Casa (remote access, anywhere):**
+
+If you have a Nabu Casa subscription, the same **Open Web UI** button works from outside your home network through your `https://xxx.ui.nabu.casa` cloud URL. No port forwarding needed.
+
+**Via direct port (local network only):**
+
+```
+http://homeassistant.local:43127
+```
+
+Useful for bookmarks and PWA installation. Does not work through Nabu Casa.
+
+### Data persistence
+
+The SQLite database lives at `/data/shelfy.db` inside the container. HA maps this to a persistent volume — your data survives add-on updates, container restarts, and HA reboots.
+
+To back up: use HA's built-in **Backup** feature (Settings → System → Backups), which includes add-on data volumes.
+
+### Updating
+
+When a new version is published to GitHub, an **Update** button appears on the add-on page. Click it — HA rebuilds the image. Your data is untouched.
+
+> If no Update button appears: go to the Add-on Store → three-dot menu → **Reload**, then return to the Shelfy page.
+
+---
+
+## Running standalone (without Home Assistant)
+
+Shelfy also runs as a plain Node.js process, with no Docker or HA required.
 
 ### 1. Install dependencies
 
@@ -28,25 +80,9 @@ Locations  (rooms, areas)
 npm install
 ```
 
-This installs dependencies for both `backend/` and `frontend/` via the root `postinstall` script.
+Installs dependencies for both `backend/` and `frontend/` via the root `postinstall` hook.
 
-### 2. Configure environment (optional)
-
-```bash
-cp .env.example .env
-# Edit .env to change PORT if needed (default: 43127)
-```
-
-**Scanning QR codes from a phone:** QR codes encode the URL that will be opened when scanned. By default this uses the origin of the browser tab displaying the QR — which is `localhost` and unreachable from another device. To make QR codes scannable on your local network, set `VITE_PUBLIC_BASE_URL` to your machine's LAN address **before building the frontend**:
-
-```bash
-# .env
-VITE_PUBLIC_BASE_URL=http://192.168.1.42:43127
-```
-
-Find your LAN IP with `ip addr` (Linux) or `ipconfig` (Windows) or `ifconfig` (macOS). Then rebuild with `npm run build`.
-
-### 3. Build the frontend
+### 2. Build the frontend
 
 ```bash
 npm run build
@@ -54,7 +90,7 @@ npm run build
 
 Compiles the React app into `frontend/dist/`.
 
-### 4. Start the server
+### 3. Start the server
 
 ```bash
 npm start
@@ -62,92 +98,95 @@ npm start
 
 Open **http://localhost:43127** — the same process serves both the API and the UI.
 
+### Configuration (optional)
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT` | `43127` | Port the server listens on |
+| `VITE_PUBLIC_BASE_URL` | _(none)_ | Base URL embedded in QR codes — only needed if you want to override the automatic detection (see QR section below) |
+
 ---
 
 ## Installing on mobile (PWA)
 
-Shelfy is a Progressive Web App. Once the server is running, you can install it on your phone like a native app.
+Shelfy is a Progressive Web App. Once the server is running, install it on your phone like a native app.
 
-### Android (Chrome)
+**Android (Chrome):** three-dot menu → **Add to Home screen** → **Install**
 
-1. Open the app URL in Chrome.
-2. Tap the **three-dot menu** → **Add to Home screen**.
-3. Tap **Install** in the prompt that appears.
+**iOS (Safari):** Share button → **Add to Home Screen** → **Add**
 
-### iOS (Safari)
+The installed app opens full-screen with no browser chrome. Static assets load instantly from cache. See [Offline support](#offline-support) for what works without a network connection.
 
-1. Open the app URL in Safari.
-2. Tap the **Share** button (rectangle with arrow).
-3. Scroll down and tap **Add to Home Screen**.
-4. Tap **Add**.
-
-The installed app opens full-screen with no browser chrome, and its static assets (shell, JS, CSS) load instantly from cache even without a network connection. API calls (your data) still require connectivity — see [Offline support](#offline-support) below.
-
-**Keeping data fresh:** Every page has a **Refresh** button (↻) in the header. Data also auto-refreshes whenever you switch back to the app tab — so changes made on another device appear without any manual action. On mobile, **pull down** from the top of any page to refresh.
-
----
-
-## Offline support
-
-Shelfy supports offline use for container pages. The app uses IndexedDB to cache data locally and a simple sync queue to replay changes when connectivity returns.
-
-### What works offline
-
-| Action | Offline support |
-|--------|----------------|
-| Open a previously visited container | Yes — loaded from local cache |
-| Add an item to a container | Yes — item appears immediately, syncs when online |
-| Delete an item from a container | Yes — item removed immediately, syncs when online |
-| Search | No — requires server |
-| Browse locations / location detail | No — no cache for those pages |
-| Edit an item | No — network required |
-
-### What is not supported offline
-
-- Containers that have never been opened while online (no cache available)
-- Editing items (shows an error if attempted offline)
-- Search, locations, and all other pages
-
-### How sync works
-
-1. When you open a container online, the full container snapshot (container info + item list) is saved to IndexedDB.
-2. If you add or delete items while offline, the change appears instantly in the UI and a pending mutation is enqueued.
-3. Pending mutations are replayed when:
-   - The device comes back online (automatic, transparent)
-   - The tab becomes visible again (existing refresh behavior, now offline-aware)
-   - You tap **Sync now** from the container page
-4. Mutations are processed in order. A network failure pauses the queue; it will retry on the next trigger. A server-side error (e.g. item already deleted) drops the mutation and continues.
-
-### Create + delete collapse
-
-If you add an item while offline and then delete it before it syncs, Shelfy detects that and removes the pending create from the queue entirely. No unnecessary create/delete pair is sent to the server.
-
-### Indicators
-
-- **Offline bar** — amber banner shown when offline, including "showing cached data" note
-- **Pending changes bar** — blue banner shown when online with unsynced mutations, with a **Sync now** button
-- **Pending badge** — each item added offline is labeled *pending* until it syncs
-- Items added offline show a slightly yellow-tinted card border
+**Keeping data fresh:** Every page has a **Refresh** button (↻) in the header. Data also refreshes automatically when you switch back to the app tab. On mobile, **pull down** from the top of any page to refresh.
 
 ---
 
 ## Printing QR labels
 
-Each container has a QR code that links directly to it. To print a physical label:
+Each container has a QR code that links directly to it.
 
-1. Open a container and tap the QR icon (⊞) in the header.
-2. Click **Print QR** — this opens `/print/container/:token` in a new tab.
-3. The print dialog opens automatically. The page shows only the QR code, container name, and location — nothing else.
+1. Open a container and tap the QR icon (⊞) in the header
+2. Click **Print QR** — opens the print page in a new tab
+3. The print dialog opens automatically
 
-The printed label is scannable with any phone camera. Scanning redirects to the container page with the **Add Item** form pre-opened.
+The printed label is scannable with any phone camera. Scanning opens the container page with the **Add Item** form pre-opened.
 
-> **Local network:** QR codes must encode your machine's LAN IP, not `localhost`. See the [configuration note above](#2-configure-environment-optional) for `VITE_PUBLIC_BASE_URL`.
+### QR codes and remote access
+
+QR codes encode whatever URL you are currently using to access Shelfy. This means:
+
+- **If you print from your Nabu Casa URL** (`https://xxx.ui.nabu.casa/...`): the QR works from anywhere with an internet connection — at home, away, or on mobile data. The scanning device needs to be logged into Home Assistant in its browser once (the session cookie persists after that).
+- **If you print from the local URL** (`http://homeassistant.local:43127`): the QR only works on your home network.
+
+**Tip:** Always print QR labels while accessing Shelfy through your Nabu Casa URL.
+
+### QR codes without any network (offline)
+
+If there is no network at all (no WiFi, no mobile data), scanning a QR code still works for containers you have previously opened while online. Shelfy falls back to a local IndexedDB cache — see [Offline support](#offline-support).
 
 ---
 
-## Development mode (two processes)
+## Offline support
 
-When actively working on the frontend, run the Vite dev server alongside the backend for hot module replacement:
+Shelfy supports offline use for container pages using IndexedDB.
+
+### What works offline
+
+| Action | Offline |
+|--------|---------|
+| Open a previously visited container | Yes — loaded from local cache |
+| Add an item | Yes — appears immediately, syncs when back online |
+| Delete an item | Yes — removed immediately, syncs when back online |
+| Scan a QR code (previously visited container) | Yes — resolved from local catalog |
+| Edit an item | No — network required |
+| Search | No — requires server |
+| Locations / location detail | No — not cached |
+
+### How sync works
+
+1. When you open a container online, a full snapshot (container info + items) is saved to IndexedDB.
+2. If you add or delete items offline, the change appears immediately and is added to a pending queue.
+3. The queue is replayed automatically when the device comes back online, when the tab becomes visible, or when you tap **Sync now** on the container page.
+4. Mutations are processed in order. Network failure pauses the queue; it retries on the next trigger. A server error (e.g. item already deleted) drops that mutation and continues.
+
+If you add an item offline and delete it before it syncs, Shelfy collapses the pair — no create/delete round-trip is sent to the server.
+
+### Indicators
+
+- **Offline bar** — amber banner when offline, with "showing cached data" note
+- **Pending changes bar** — blue banner when online with unsynced mutations, with a **Sync now** button
+- **Pending badge** — items added offline are labeled *pending* until synced
+- Items added offline have a slightly yellow-tinted card border
+
+---
+
+## Development
+
+When working on the frontend, run the Vite dev server alongside the backend for hot module replacement:
 
 ```bash
 # Terminal 1 — backend with auto-reload
@@ -159,146 +198,15 @@ npm run dev:ui
 
 Open **http://localhost:5173**.
 
----
+### npm scripts
 
-## npm scripts
-
-| Script        | What it does                                        |
-|---------------|-----------------------------------------------------|
-| `npm install` | Installs all dependencies (root postinstall hook)   |
-| `npm run build` | Builds the React frontend into `frontend/dist/`   |
-| `npm start`   | Starts the Express server (serves API + built UI)   |
-| `npm run dev:api` | Starts the backend with nodemon (auto-reload)   |
-| `npm run dev:ui`  | Starts the Vite dev server with HMR              |
-
----
-
-## Running as a Home Assistant Add-on
-
-Shelfy can run as a native Home Assistant Add-on on Home Assistant OS / Supervised installs (e.g. Home Assistant Green).
-
-### How it works
-
-- The add-on builds a Docker image from this repository using the `Dockerfile` at the repo root.
-- The Express server runs inside the container on port **43127**, which Home Assistant forwards to the same port on your network.
-- The SQLite database is stored in `/data/shelfy.db` inside the container, which Home Assistant maps to a **persistent volume** — your data survives add-on updates and container restarts.
-- QR codes automatically use whatever URL you use to access Shelfy (they fall back to `window.location.origin`), so scanning always works with your HA address.
-
----
-
-### Installation (local add-on via SSH/Samba)
-
-This is the simplest path for a self-hosted repo.
-
-**1. Copy the repo to your Home Assistant device**
-
-You need the Shelfy source files on your HA device. The easiest approach is via the **Samba share** add-on:
-
-```
-\\homeassistant\config\addons\local\shelfy\   ← copy repo contents here
-```
-
-Or via SSH (install the SSH add-on first):
-
-```bash
-# from your dev machine
-scp -r /path/to/Shelfy root@homeassistant:/config/addons/local/shelfy
-```
-
-The folder must contain at minimum: `Dockerfile`, `config.yaml`, `build.yaml`, `run.sh`, `backend/`, `frontend/`.
-
-**2. Reload add-ons**
-
-In Home Assistant → **Settings → Add-ons → Add-on Store** → click the three-dot menu → **Reload**.
-
-**3. Find and install Shelfy**
-
-Scroll to the bottom of the Add-on Store. Under **Local add-ons** you should see **Shelfy**. Click it → **Install**.
-
-Home Assistant will build the Docker image (this takes a few minutes the first time — `better-sqlite3` compiles from source for your CPU architecture).
-
-**4. Start the add-on**
-
-Once installed, click **Start**. Optionally enable **Start on boot** and **Watchdog**.
-
----
-
-### Accessing the UI
-
-**Via Home Assistant ingress (recommended):**
-
-After the add-on starts, an **Open Web UI** button appears on the add-on panel in Home Assistant. Click it. The URL will look like:
-
-```
-http://homeassistant.local/api/hassio_ingress/<token>/
-```
-
-This path also works remotely through **Nabu Casa** without any port-forwarding — use your `https://your-instance.ui.nabu.casa/api/hassio_ingress/<token>/` URL.
-
-**Via direct port (local only):**
-
-```
-http://homeassistant.local:43127
-```
-
-or:
-
-```
-http://<ha-ip>:43127
-```
-
-Direct port access is useful for local bookmarks and PWA installation on mobile (see [Installing on mobile](#installing-on-mobile-pwa)). It does not work through Nabu Casa remote access.
-
----
-
-### Where data is stored
-
-The SQLite database is at `/data/shelfy.db` inside the add-on container.  
-Home Assistant maps this to a persistent volume on the host, so your data is safe across:
-
-- Add-on updates (re-installs)
-- Container restarts
-- Home Assistant reboots
-
-To back it up manually: use the **Backup** feature in Home Assistant (Settings → System → Backups), which includes add-on data. The database file is also accessible at `/config/addons/data/local_shelfy/shelfy.db` via SSH or Samba if you need to copy it directly.
-
----
-
-### Installation via GitHub repository (alternative)
-
-If you push this repo to GitHub, you can add it as a proper HA add-on repository:
-
-1. In Home Assistant → **Settings → Add-ons → Add-on Store** → three-dot menu → **Repositories**.
-2. Add your GitHub URL, e.g. `https://github.com/YOUR_USERNAME/Shelfy`.
-3. Shelfy will appear in the store. Install and start it as above.
-
-> **Note:** For the GitHub path, HA fetches and builds directly from the repo. The `config.yaml` at the repo root tells HA this is an add-on repository.
-
----
-
-### Updating the add-on
-
-After pulling new changes into the local folder (or pushing to GitHub), go to the add-on page in HA and click **Update**. HA rebuilds the image with the new code. Your data in `/data/shelfy.db` is untouched.
-
----
-
-## API reference
-
-| Method | Endpoint            | Description                               |
-|--------|---------------------|-------------------------------------------|
-| GET    | /api/locations      | List all locations (with container count) |
-| GET    | /api/locations/:id  | Get location with its containers          |
-| POST   | /api/locations      | Create location                           |
-| PUT    | /api/locations/:id  | Update location                           |
-| DELETE | /api/locations/:id  | Delete location (cascades)                |
-| GET    | /api/containers/:id | Get container with its items              |
-| POST   | /api/containers     | Create container                          |
-| PUT    | /api/containers/:id | Update container                          |
-| DELETE | /api/containers/:id | Delete container (cascades)               |
-| POST   | /api/items          | Create item                               |
-| PUT    | /api/items/:id      | Update item                               |
-| DELETE | /api/items/:id      | Delete item                               |
-| GET    | /api/search?q=term  | Search items by name, description, tags   |
+| Script | What it does |
+|---|---|
+| `npm install` | Installs all dependencies (root postinstall hook) |
+| `npm run build` | Builds the React frontend into `frontend/dist/` |
+| `npm start` | Starts the Express server (serves API + built UI) |
+| `npm run dev:api` | Starts the backend with nodemon (auto-reload) |
+| `npm run dev:ui` | Starts the Vite dev server with HMR |
 
 ---
 
@@ -306,13 +214,21 @@ After pulling new changes into the local folder (or pushing to GitHub), go to th
 
 ```
 Shelfy/
-├── .env.example            # Copy to .env to configure port
+├── config.yaml             # Home Assistant add-on metadata (ingress, port, arch)
+├── build.yaml              # HA base image per architecture (aarch64, amd64, armv7)
+├── repository.yaml         # HA add-on repository descriptor
+├── Dockerfile              # Production Docker image (Node + build tools + app)
+├── run.sh                  # Add-on startup script (sets DATABASE_PATH, PORT)
+├── icon.png                # Add-on icon shown in the HA store and add-on page
+├── .env.example            # Copy to .env to configure port / QR base URL
 ├── .gitignore
 ├── package.json            # Root scripts (build, start, dev:*)
 │
 ├── backend/
-│   ├── server.js           # Express entry point — serves API + static frontend
+│   ├── server.js           # Express entry point — serves API + static frontend,
+│   │                       # injects window.__BASE__ for HA ingress support
 │   ├── db.js               # SQLite connection & schema (auto-created on first run)
+│   ├── app.js              # Express app factory (used by server + tests)
 │   ├── routes/
 │   │   ├── locations.js
 │   │   ├── containers.js
@@ -322,26 +238,54 @@ Shelfy/
 │
 └── frontend/
     ├── index.html          # PWA meta tags (theme-color, apple-touch-icon, etc.)
-    ├── vite.config.js      # Dev server proxy + VitePWA plugin config
+    ├── vite.config.js      # Relative base path + dev server proxy + VitePWA config
     ├── public/
     │   ├── favicon.svg
     │   └── icons/
     │       ├── icon-192.svg    # PWA icon (Android home screen)
     │       └── icon-512.svg    # PWA icon (splash screen / maskable)
     ├── src/
-    │   ├── main.jsx
+    │   ├── main.jsx            # App entry — BrowserRouter with window.__BASE__ basename
     │   ├── App.jsx
     │   ├── App.css
-    │   ├── api.js
-    │   ├── hooks/
-    │   │   └── usePullToRefresh.js  # Touch gesture hook for pull-to-refresh
+    │   ├── api.js              # API client — uses window.__BASE__ prefix for ingress
     │   ├── components/
     │   │   ├── Navbar.jsx
-    │   │   └── Modal.jsx
-    │   └── pages/
-    │       ├── LocationsPage.jsx
-    │       ├── LocationDetailPage.jsx
-    │       ├── ContainerDetailPage.jsx
-    │       └── SearchPage.jsx
+    │   │   ├── Modal.jsx
+    │   │   └── ContainerQRCode.jsx  # QR URL built from current browser origin
+    │   ├── hooks/
+    │   │   ├── useOnlineStatus.js
+    │   │   └── usePullToRefresh.js
+    │   ├── pages/
+    │   │   ├── LocationsPage.jsx
+    │   │   ├── LocationDetailPage.jsx
+    │   │   ├── ContainerDetailPage.jsx
+    │   │   ├── ScanContainerPage.jsx   # QR scan handler — falls back to offline cache
+    │   │   ├── SearchPage.jsx
+    │   │   └── PrintContainerPage.jsx
+    │   └── services/
+    │       ├── offlineDB.js        # IndexedDB layer (cache, pending mutations, catalog)
+    │       └── syncEngine.js       # Replays pending mutations when back online
     └── package.json
 ```
+
+---
+
+## API reference
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | /api/locations | List all locations (with container count) |
+| GET | /api/locations/:id | Get location with its containers |
+| POST | /api/locations | Create location |
+| PUT | /api/locations/:id | Update location |
+| DELETE | /api/locations/:id | Delete location (cascades) |
+| GET | /api/containers/:id | Get container with its items |
+| GET | /api/containers/qr/:token | Get container by QR token |
+| POST | /api/containers | Create container |
+| PUT | /api/containers/:id | Update container |
+| DELETE | /api/containers/:id | Delete container (cascades) |
+| POST | /api/items | Create item |
+| PUT | /api/items/:id | Update item |
+| DELETE | /api/items/:id | Delete item |
+| GET | /api/search?q=term | Search items by name, description, tags |
