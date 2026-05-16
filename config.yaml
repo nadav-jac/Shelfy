@@ -1,6 +1,6 @@
 name: "Shelfy"
 description: "Personal home storage manager — track what's in your cabinets and find it fast."
-version: "1.4.0"
+version: "1.5.0"
 slug: "shelfy"
 
 # No S6-overlay init scripts needed; run.sh starts the process directly.
@@ -25,10 +25,6 @@ ingress_entry: "/"
 panel_icon: mdi:archive
 panel_title: "Shelfy"
 
-options:
-  qr_base_url: "http://homeassistant.local:43127"
-schema:
-  qr_base_url: str
 
 # /data is Home Assistant's persistent storage directory for add-ons.
 # The SQLite database is stored here so it survives container rebuilds.
