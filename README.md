@@ -137,12 +137,23 @@ The printed label is scannable with any phone camera. Scanning opens the contain
 
 ### QR codes and remote access
 
-QR codes encode whatever URL you are currently using to access Shelfy. This means:
+QR codes encode whatever URL you are currently using to access Shelfy:
 
-- **If you print from your Nabu Casa URL** (`https://xxx.ui.nabu.casa/...`): the QR works from anywhere with an internet connection — at home, away, or on mobile data. The scanning device needs to be logged into Home Assistant in its browser once (the session cookie persists after that).
-- **If you print from the local URL** (`http://homeassistant.local:43127`): the QR only works on your home network.
+- **Printed from your Nabu Casa URL** (`https://xxx.ui.nabu.casa/...`): works from anywhere with an internet connection — at home, away, or on mobile data.
+- **Printed from the local URL** (`http://homeassistant.local:43127`): works on your home network only.
 
 **Tip:** Always print QR labels while accessing Shelfy through your Nabu Casa URL.
+
+### The scanning browser must be logged into Home Assistant
+
+Shelfy is served through HA ingress, which requires an active Home Assistant session. When a phone camera scans a QR code and opens the link, it uses the phone's **default browser**. If that browser has never been logged into your Home Assistant / Nabu Casa account, it will get an authentication error.
+
+**One-time setup per device:**
+1. Open your Nabu Casa URL (`https://xxx.ui.nabu.casa`) in the browser your phone camera uses to open links (usually Safari on iPhone, Chrome on Android).
+2. Log into Home Assistant.
+3. From then on, scanning any QR code opens directly in the app — no further login needed.
+
+> **Note for Mac:** macOS opens scanned/clicked links in the system default browser. If you get an authentication error, log into Home Assistant in that browser first.
 
 ### QR codes without any network (offline)
 
