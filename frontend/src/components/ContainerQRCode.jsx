@@ -1,13 +1,17 @@
 import { QRCodeSVG } from 'qrcode.react';
 
 export function buildQrUrl(token) {
-  // Origin: prefer the build-time env var (set for LAN use), otherwise use the
-  // current browser origin (correct for HA Cloud / Nabu Casa remote access).
-  const origin = import.meta.env.VITE_PUBLIC_BASE_URL || window.location.origin;
-  // Include the ingress base path so the QR URL works when accessed through
-  // Home Assistant ingress. Empty string when running locally.
-  const pathBase = window.__BASE__ || '';
-  return `${origin}${pathBase}/scan/container/${token}`;
+  // QR codes are printed on physical labels and scanned by phones that have no
+  // Home Assistant session cookie. They must therefore point to the direct-port
+  // URL, never the ingress URL (which requires HA authentication → 401).
+  //
+  // Priority:
+  //  1. window.__QR_BASE__ — injected by the server from the QR_BASE_URL env var
+  //     (set via the add-on "qr_base_url" option in HA, e.g. http://homeassistant.local:43127).
+  //  2. VITE_PUBLIC_BASE_URL — build-time override for standalone / non-HA use.
+  //  3. window.location.origin — fallback for local dev (no ingress, no config needed).
+  const base = window.__QR_BASE__ || import.meta.env.VITE_PUBLIC_BASE_URL || window.location.origin;
+  return `${base}/scan/container/${token}`;
 }
 
 export default function ContainerQRCode({ token, size = 220 }) {

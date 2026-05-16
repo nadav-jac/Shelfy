@@ -14,14 +14,21 @@ const distPath = path.join(__dirname, '../frontend/dist');
 app.use(require('express').static(distPath, { index: false }));
 
 // Catch-all: let React Router handle client-side routes.
-// Inject window.__BASE__ so the frontend can adapt to Home Assistant ingress.
-// When running locally (no ingress), X-Ingress-Path is absent and __BASE__ is "".
+// Inject runtime config so the frontend can adapt to Home Assistant ingress:
+//   window.__BASE__    — ingress path prefix (e.g. "/api/hassio_ingress/<token>")
+//                        used to fix routing and API calls under ingress.
+//   window.__QR_BASE__ — direct-port base URL for QR codes (e.g. "http://homeassistant.local:43127")
+//                        QR codes must NOT use the ingress URL because HA ingress
+//                        requires an authenticated session — phones scanning a
+//                        physical label would get a 401.
+const QR_BASE_URL = process.env.QR_BASE_URL || '';
+const htmlTemplate = fs.readFileSync(path.join(distPath, 'index.html'), 'utf8');
+
 app.get('*', (req, res) => {
   const ingressPath = req.headers['x-ingress-path'] || '';
-  const html = fs.readFileSync(path.join(distPath, 'index.html'), 'utf8');
-  const injected = html.replace(
+  const injected = htmlTemplate.replace(
     '<head>',
-    `<head><script>window.__BASE__=${JSON.stringify(ingressPath)};</script>`,
+    `<head><script>window.__BASE__=${JSON.stringify(ingressPath)};window.__QR_BASE__=${JSON.stringify(QR_BASE_URL)};</script>`,
   );
   res.type('html').send(injected);
 });
