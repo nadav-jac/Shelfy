@@ -2,6 +2,8 @@ name: "Shelfy"
 description: "Personal home storage manager — track what's in your cabinets and find it fast."
 version: "1.5.1"
 slug: "shelfy"
+url: "https://github.com/nadav-jac/Shelfy"
+image: "ghcr.io/nadav-jac/shelfy-{arch}"
 
 # No S6-overlay init scripts needed; run.sh starts the process directly.
 init: false
@@ -25,8 +27,15 @@ ingress_entry: "/"
 panel_icon: mdi:archive
 panel_title: "Shelfy"
 
-
 # /data is Home Assistant's persistent storage directory for add-ons.
-# The SQLite database is stored here so it survives container rebuilds.
+# The SQLite database and any future files are stored here so they survive
+# container rebuilds and add-on updates.
 map:
   - data:rw
+
+healthcheck:
+  test: "node -e \"require('http').get('http://localhost:43127/', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))\""
+  interval: 30s
+  timeout: 5s
+  retries: 3
+  start_period: 10s

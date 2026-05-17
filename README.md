@@ -300,3 +300,46 @@ Shelfy/
 | PUT | /api/items/:id | Update item |
 | DELETE | /api/items/:id | Delete item |
 | GET | /api/search?q=term | Search items by name, description, tags |
+
+---
+
+## Troubleshooting
+
+### Add-on won't start (Home Assistant)
+
+**Check the logs:**
+1. Go to the Shelfy add-on page → **Logs** tab
+2. Look for any error messages about the database or port
+
+**Common issues:**
+
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| `sqlite3: ENOENT /data/shelfy.db` | Data volume not mounted | Restart the add-on or check HA's volume configuration |
+| Port already in use | Another service on port 43127 | Change port in config.yaml or disable the conflicting service |
+| `better-sqlite3: build failed` | Architecture mismatch | This shouldn't happen; try rebuilding the add-on image |
+
+### Ingress not working
+
+- **Direct port works but ingress doesn't?** — Make sure the add-on is running. Click **Open Web UI** — it should open immediately.
+- **"Authentication required" error?** — Log into Home Assistant first via the sidebar or settings.
+- **QR codes from ingress not working?** — Make sure the phone's browser is logged into HA (see [QR codes and remote access](#qr-codes-and-remote-access)).
+
+### Database file missing or corrupted
+
+The database file persists at `/data/shelfy.db`. If it becomes corrupted:
+
+1. In Home Assistant, stop the Shelfy add-on
+2. In Home Assistant's **Settings → Backups**, restore a previous backup (if available)
+3. Or delete the database — the add-on creates a fresh one on next start (your data will be lost)
+
+### Performance issues
+
+- **Slow search or UI lag?** — Try refreshing the page or restarting the add-on
+- **SQLite locks?** — If you're running other local software also writing to the same database, contention may occur. The app handles concurrent writes gracefully via WAL mode and retries.
+
+---
+
+## Support
+
+For issues, questions, or feature requests, see [GitHub Issues](https://github.com/nadav-jac/Shelfy/issues).
