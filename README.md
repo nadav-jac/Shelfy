@@ -20,17 +20,73 @@ Locations  (rooms, areas)
 
 ---
 
+## Repository contents
+
+This repository contains two separate but related pieces:
+
+| Path | What it is |
+|---|---|
+| `shelfy/` | The Home Assistant add-on — runs the Shelfy Node/Express app |
+| `custom_components/shelfy_redirect/` | A small HA custom integration that provides stable QR code URLs |
+
+**Why two pieces?**
+
+QR codes are printed on physical box labels. Raw HA ingress URLs (e.g. `/api/hassio_ingress/<token>/...`) contain a dynamic token that changes every time the add-on is reinstalled — any printed labels would break. The `shelfy_redirect` integration registers the stable route `/shelfy/scan/container/<qr_token>` on HA's own HTTP server and redirects it to the current ingress URL. This URL never changes, so printed labels last indefinitely.
+
+---
+
 ## Running on Home Assistant (recommended)
 
-Shelfy runs as a native Home Assistant Add-on on Home Assistant OS / Supervised installs (e.g. Home Assistant Green). This is the recommended way to run it — the add-on handles everything automatically and keeps the app always available on your home network.
-
-### Install from GitHub
+### Step 1 — Add the repository and install the add-on
 
 1. In Home Assistant → **Settings → Add-ons → Add-on Store** → three-dot menu (⋮) → **Repositories**
 2. Add: `https://github.com/nadav-jac/Shelfy`
 3. Scroll to the bottom of the store — **Shelfy** appears under the new repository
 4. Click **Install** — HA builds the Docker image (takes a few minutes the first time; `better-sqlite3` compiles from source for your CPU architecture)
-5. Click **Start**. Enable **Start on boot** and **Watchdog** if you want it always available.
+5. Click **Start**. Enable **Start on boot** and **Watchdog**.
+
+### Step 2 — Install the shelfy_redirect integration
+
+The integration is a small Python file that lives in `custom_components/shelfy_redirect/` in this repository.
+
+**Option A — Copy manually (via Samba or SSH):**
+
+Copy the folder to your HA config directory:
+
+```
+custom_components/shelfy_redirect/   →   /config/custom_components/shelfy_redirect/
+```
+
+Via SSH:
+```bash
+scp -r custom_components/shelfy_redirect root@homeassistant:/config/custom_components/
+```
+
+**Option B — HACS (if you use it):**
+
+Add this repository as a custom HACS repository (type: Integration), then install `Shelfy Redirect` from HACS.
+
+### Step 3 — Enable the integration
+
+Add to your `/config/configuration.yaml`:
+
+```yaml
+shelfy_redirect:
+```
+
+That's all that's needed — the `addon_slug` defaults to `shelfy`.
+
+> **If HA uses a different slug:** Some HA configurations prefix add-on slugs. If the redirect returns a 502 error, check the actual slug in **Settings → Add-ons → Shelfy** (it appears in the URL). Then configure:
+> ```yaml
+> shelfy_redirect:
+>   addon_slug: your_actual_slug
+> ```
+
+### Step 4 — Restart Home Assistant
+
+Go to **Settings → System → Restart** (or `Developer Tools → Restart`). The integration registers the `/shelfy/scan/container/{token}` route on startup.
+
+---
 
 ### Accessing the UI
 
@@ -44,7 +100,7 @@ http://homeassistant.local/api/hassio_ingress/<token>/
 
 Shelfy also appears in the HA sidebar (enable the **Show in sidebar** toggle on the add-on page).
 
-**Via Nabu Casa (remote access, anywhere):**
+**Via Nabu Casa (remote access from anywhere):**
 
 If you have a Nabu Casa subscription, the same **Open Web UI** button works from outside your home network through your `https://xxx.ui.nabu.casa` cloud URL. No port forwarding needed.
 
@@ -62,66 +118,11 @@ The SQLite database lives at `/data/shelfy.db` inside the container. HA maps thi
 
 To back up: use HA's built-in **Backup** feature (Settings → System → Backups), which includes add-on data volumes.
 
-### Updating
+### Updating the add-on
 
 When a new version is published to GitHub, an **Update** button appears on the add-on page. Click it — HA rebuilds the image. Your data is untouched.
 
 > If no Update button appears: go to the Add-on Store → three-dot menu → **Reload**, then return to the Shelfy page.
-
----
-
-## Running standalone (without Home Assistant)
-
-Shelfy also runs as a plain Node.js process, with no Docker or HA required.
-
-### 1. Install dependencies
-
-```bash
-npm install
-```
-
-Installs dependencies for both `backend/` and `frontend/` via the root `postinstall` hook.
-
-### 2. Build the frontend
-
-```bash
-npm run build
-```
-
-Compiles the React app into `frontend/dist/`.
-
-### 3. Start the server
-
-```bash
-npm start
-```
-
-Open **http://localhost:43127** — the same process serves both the API and the UI.
-
-### Configuration (optional)
-
-```bash
-cp .env.example .env
-```
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `PORT` | `43127` | Port the server listens on |
-| `VITE_PUBLIC_BASE_URL` | _(none)_ | Base URL embedded in QR codes — only needed if you want to override the automatic detection (see QR section below) |
-
----
-
-## Installing on mobile (PWA)
-
-Shelfy is a Progressive Web App. Once the server is running, install it on your phone like a native app.
-
-**Android (Chrome):** three-dot menu → **Add to Home screen** → **Install**
-
-**iOS (Safari):** Share button → **Add to Home Screen** → **Add**
-
-The installed app opens full-screen with no browser chrome. Static assets load instantly from cache. See [Offline support](#offline-support) for what works without a network connection.
-
-**Keeping data fresh:** Every page has a **Refresh** button (↻) in the header. Data also refreshes automatically when you switch back to the app tab. On mobile, **pull down** from the top of any page to refresh.
 
 ---
 
@@ -135,29 +136,46 @@ Each container has a QR code that links directly to it.
 
 The printed label is scannable with any phone camera. Scanning opens the container page with the **Add Item** form pre-opened.
 
-### QR codes and remote access
+### How QR URLs work
 
-QR codes encode whatever URL you are currently using to access Shelfy:
+QR codes encode the stable URL:
 
-- **Printed from your Nabu Casa URL** (`https://xxx.ui.nabu.casa/...`): works from anywhere with an internet connection — at home, away, or on mobile data.
-- **Printed from the local URL** (`http://homeassistant.local:43127`): works on your home network only.
+```
+https://xxx.ui.nabu.casa/shelfy/scan/container/<qr_token>
+```
 
-**Tip:** Always print QR labels while accessing Shelfy through your Nabu Casa URL.
+(or `http://homeassistant.local/shelfy/scan/container/<qr_token>` when accessed locally)
 
-### The scanning browser must be logged into Home Assistant
+When scanned, this hits the `shelfy_redirect` integration, which looks up the current ingress URL and redirects the browser there. Because the redirect uses a relative path, the correct host (local or Nabu Casa) is preserved automatically.
 
-Shelfy is served through HA ingress, which requires an active Home Assistant session. When a phone camera scans a QR code and opens the link, it uses the phone's **default browser**. If that browser has never been logged into your Home Assistant / Nabu Casa account, it will get an authentication error.
+The `<qr_token>` is a permanent identifier stored in the database. Unlike the ingress token, it never changes — even if you reinstall the add-on.
+
+### One-time browser login
+
+HA ingress requires an active session. When a phone camera scans a QR code and opens the link in its default browser for the first time, HA will show a login page.
 
 **One-time setup per device:**
-1. Open your Nabu Casa URL (`https://xxx.ui.nabu.casa`) in the browser your phone camera uses to open links (usually Safari on iPhone, Chrome on Android).
+1. Open your Nabu Casa URL (`https://xxx.ui.nabu.casa`) in the browser your phone camera uses for links (Safari on iPhone, Chrome on Android).
 2. Log into Home Assistant.
-3. From then on, scanning any QR code opens directly in the app — no further login needed.
-
-> **Note for Mac:** macOS opens scanned/clicked links in the system default browser. If you get an authentication error, log into Home Assistant in that browser first.
+3. After that, scanning any QR code opens directly in the app — no further login needed.
 
 ### QR codes without any network (offline)
 
 If there is no network at all (no WiFi, no mobile data), scanning a QR code still works for containers you have previously opened while online. Shelfy falls back to a local IndexedDB cache — see [Offline support](#offline-support).
+
+---
+
+## Installing on mobile (PWA)
+
+Shelfy is a Progressive Web App. Once the server is running, install it on your phone like a native app.
+
+**Android (Chrome):** three-dot menu → **Add to Home screen** → **Install**
+
+**iOS (Safari):** Share button → **Add to Home Screen** → **Add**
+
+The installed app opens full-screen with no browser chrome. Static assets load instantly from cache.
+
+**Keeping data fresh:** Every page has a **Refresh** button (↻) in the header. Data also refreshes automatically when you switch back to the app tab. On mobile, **pull down** from the top of any page to refresh.
 
 ---
 
@@ -195,29 +213,37 @@ If you add an item offline and delete it before it syncs, Shelfy collapses the p
 
 ---
 
-## Development
+## Running standalone (without Home Assistant)
 
-When working on the frontend, run the Vite dev server alongside the backend for hot module replacement:
+Shelfy also runs as a plain Node.js process, with no Docker or HA required.
 
 ```bash
-# Terminal 1 — backend with auto-reload
-npm run dev:api
+npm install       # installs backend + frontend dependencies
+npm run build     # compiles React app into shelfy/frontend/dist/
+npm start         # starts Express on http://localhost:43127
+```
 
-# Terminal 2 — Vite dev server (proxies /api → localhost:43127)
-npm run dev:ui
+In standalone mode, QR codes still work: Express handles `/shelfy/scan/container/:token` and redirects to the React scan route. No custom integration needed.
+
+### Configuration (optional)
+
+```bash
+cp shelfy/.env.example shelfy/.env
+```
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT` | `43127` | Port the server listens on |
+| `VITE_PUBLIC_BASE_URL` | _(none)_ | Override the QR code base URL (set before `npm run build`) |
+
+### Development (two processes)
+
+```bash
+npm run dev:api   # Terminal 1 — backend with nodemon auto-reload
+npm run dev:ui    # Terminal 2 — Vite dev server with HMR
 ```
 
 Open **http://localhost:5173**.
-
-### npm scripts
-
-| Script | What it does |
-|---|---|
-| `npm install` | Installs all dependencies (root postinstall hook) |
-| `npm run build` | Builds the React frontend into `frontend/dist/` |
-| `npm start` | Starts the Express server (serves API + built UI) |
-| `npm run dev:api` | Starts the backend with nodemon (auto-reload) |
-| `npm run dev:ui` | Starts the Vite dev server with HMR |
 
 ---
 
@@ -225,59 +251,61 @@ Open **http://localhost:5173**.
 
 ```
 Shelfy/
-├── config.yaml             # Home Assistant add-on metadata (ingress, port, arch)
-├── build.yaml              # HA base image per architecture (aarch64, amd64, armv7)
-├── repository.yaml         # HA add-on repository descriptor
-├── Dockerfile              # Production Docker image (Node + build tools + app)
-├── run.sh                  # Add-on startup script (sets DATABASE_PATH, PORT)
-├── icon.png                # Add-on icon shown in the HA store and add-on page
-├── .env.example            # Copy to .env to configure port / QR base URL
+├── repository.yaml             # HA add-on repository descriptor
+├── README.md
 ├── .gitignore
-├── package.json            # Root scripts (build, start, dev:*)
+├── package.json                # Root scripts (build, start, dev:*)
 │
-├── backend/
-│   ├── server.js           # Express entry point — serves API + static frontend,
-│   │                       # injects window.__BASE__ for HA ingress support
-│   ├── db.js               # SQLite connection & schema (auto-created on first run)
-│   ├── app.js              # Express app factory (used by server + tests)
-│   ├── routes/
-│   │   ├── locations.js
-│   │   ├── containers.js
-│   │   ├── items.js
-│   │   └── search.js
-│   └── package.json
+├── shelfy/                     # ── Home Assistant add-on ──────────────────────
+│   ├── config.yaml             # Add-on metadata (ingress, port, arch, version)
+│   ├── build.yaml              # HA base image per architecture
+│   ├── Dockerfile              # Production image (Node + build tools + app)
+│   ├── run.sh                  # Container startup script
+│   ├── icon.png                # Add-on icon (shown in HA store / add-on page)
+│   ├── .env.example            # Copy to shelfy/.env for local configuration
+│   │
+│   ├── backend/
+│   │   ├── server.js           # Express entry — API + static frontend +
+│   │   │                       # window.__BASE__ injection for HA ingress +
+│   │   │                       # /shelfy/scan/container/:token standalone redirect
+│   │   ├── db.js               # SQLite connection & schema
+│   │   ├── app.js              # Express app factory
+│   │   ├── routes/
+│   │   │   ├── locations.js
+│   │   │   ├── containers.js
+│   │   │   ├── items.js
+│   │   │   └── search.js
+│   │   └── package.json
+│   │
+│   └── frontend/
+│       ├── index.html
+│       ├── vite.config.js      # Relative base path + dev proxy + VitePWA
+│       ├── public/
+│       │   ├── favicon.svg
+│       │   └── icons/
+│       ├── src/
+│       │   ├── main.jsx        # BrowserRouter with window.__BASE__ basename
+│       │   ├── App.jsx
+│       │   ├── App.css
+│       │   ├── api.js          # API client with window.__BASE__ prefix
+│       │   ├── components/
+│       │   │   ├── Navbar.jsx
+│       │   │   ├── Modal.jsx
+│       │   │   └── ContainerQRCode.jsx  # Stable /shelfy/scan/... QR URLs
+│       │   ├── hooks/
+│       │   ├── pages/
+│       │   │   ├── ScanContainerPage.jsx  # QR handler, offline fallback
+│       │   │   └── ...
+│       │   └── services/
+│       │       ├── offlineDB.js    # IndexedDB cache + pending mutations
+│       │       └── syncEngine.js   # Mutation replay on reconnect
+│       └── package.json
 │
-└── frontend/
-    ├── index.html          # PWA meta tags (theme-color, apple-touch-icon, etc.)
-    ├── vite.config.js      # Relative base path + dev server proxy + VitePWA config
-    ├── public/
-    │   ├── favicon.svg
-    │   └── icons/
-    │       ├── icon-192.svg    # PWA icon (Android home screen)
-    │       └── icon-512.svg    # PWA icon (splash screen / maskable)
-    ├── src/
-    │   ├── main.jsx            # App entry — BrowserRouter with window.__BASE__ basename
-    │   ├── App.jsx
-    │   ├── App.css
-    │   ├── api.js              # API client — uses window.__BASE__ prefix for ingress
-    │   ├── components/
-    │   │   ├── Navbar.jsx
-    │   │   ├── Modal.jsx
-    │   │   └── ContainerQRCode.jsx  # QR URL built from current browser origin
-    │   ├── hooks/
-    │   │   ├── useOnlineStatus.js
-    │   │   └── usePullToRefresh.js
-    │   ├── pages/
-    │   │   ├── LocationsPage.jsx
-    │   │   ├── LocationDetailPage.jsx
-    │   │   ├── ContainerDetailPage.jsx
-    │   │   ├── ScanContainerPage.jsx   # QR scan handler — falls back to offline cache
-    │   │   ├── SearchPage.jsx
-    │   │   └── PrintContainerPage.jsx
-    │   └── services/
-    │       ├── offlineDB.js        # IndexedDB layer (cache, pending mutations, catalog)
-    │       └── syncEngine.js       # Replays pending mutations when back online
-    └── package.json
+└── custom_components/          # ── HA custom integration ───────────────────────
+    └── shelfy_redirect/
+        ├── manifest.json       # Integration metadata
+        └── __init__.py         # Registers /shelfy/scan/container/{token} →
+                                # redirects to current Shelfy ingress URL
 ```
 
 ---
@@ -305,38 +333,31 @@ Shelfy/
 
 ## Troubleshooting
 
-### Add-on won't start (Home Assistant)
+### Add-on won't start
 
-**Check the logs:**
-1. Go to the Shelfy add-on page → **Logs** tab
-2. Look for any error messages about the database or port
-
-**Common issues:**
+Go to the Shelfy add-on page → **Logs** tab.
 
 | Problem | Cause | Solution |
 |---------|-------|----------|
-| `sqlite3: ENOENT /data/shelfy.db` | Data volume not mounted | Restart the add-on or check HA's volume configuration |
-| Port already in use | Another service on port 43127 | Change port in config.yaml or disable the conflicting service |
-| `better-sqlite3: build failed` | Architecture mismatch | This shouldn't happen; try rebuilding the add-on image |
+| `ENOENT /data/shelfy.db` | Data volume not mounted | Restart the add-on |
+| Port already in use | Another service on port 43127 | Change port in `shelfy/config.yaml` |
+| `better-sqlite3: build failed` | Architecture mismatch | Try rebuilding the add-on image |
 
-### Ingress not working
+### QR redirect returns 502
 
-- **Direct port works but ingress doesn't?** — Make sure the add-on is running. Click **Open Web UI** — it should open immediately.
-- **"Authentication required" error?** — Log into Home Assistant first via the sidebar or settings.
-- **QR codes from ingress not working?** — Make sure the phone's browser is logged into HA (see [QR codes and remote access](#qr-codes-and-remote-access)).
+The integration can't find the add-on. Check the actual slug in **Settings → Add-ons → Shelfy** (it's in the page URL). If it differs from `shelfy`, set `addon_slug` in `configuration.yaml`.
 
-### Database file missing or corrupted
+### QR redirect returns 503
 
-The database file persists at `/data/shelfy.db`. If it becomes corrupted:
+The Shelfy add-on is not running. Start it in **Settings → Add-ons → Shelfy → Start**.
 
-1. In Home Assistant, stop the Shelfy add-on
-2. In Home Assistant's **Settings → Backups**, restore a previous backup (if available)
-3. Or delete the database — the add-on creates a fresh one on next start (your data will be lost)
+### Ingress authentication error
 
-### Performance issues
+The scanning browser hasn't logged into HA yet. Log in once at your Nabu Casa URL — the session persists.
 
-- **Slow search or UI lag?** — Try refreshing the page or restarting the add-on
-- **SQLite locks?** — If you're running other local software also writing to the same database, contention may occur. The app handles concurrent writes gracefully via WAL mode and retries.
+### Database missing or corrupted
+
+The database lives at `/data/shelfy.db`. Use **Settings → System → Backups** to restore. Or stop the add-on, delete the database file, and restart — a fresh database is created automatically (data will be lost).
 
 ---
 
