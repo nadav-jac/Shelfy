@@ -7,6 +7,16 @@ const createApp = require('./app');
 
 const app = createApp(db);
 
+// Stable QR redirect for standalone (non-HA) mode.
+// QR codes always encode /shelfy/scan/container/<token> — a path that is
+// stable regardless of how the server is deployed.
+// In HA mode the shelfy_redirect custom integration intercepts this path
+// on HA's HTTP server before it ever reaches Express.
+// In standalone mode Express handles it here and redirects to the React route.
+app.get('/shelfy/scan/container/:token', (req, res) => {
+  res.redirect(`/scan/container/${req.params.token}`);
+});
+
 // Serve the built frontend static assets (JS, CSS, icons, etc.)
 // index: false ensures index.html is never served directly here —
 // it always goes through the catch-all below so window.__BASE__ gets injected.
