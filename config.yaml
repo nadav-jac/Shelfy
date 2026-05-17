@@ -1,6 +1,6 @@
 name: "Shelfy"
 description: "Personal home storage manager — track what's in your cabinets and find it fast."
-version: "1.5.1"
+version: "1.5.2"
 slug: "shelfy"
 url: "https://github.com/nadav-jac/Shelfy"
 image: "ghcr.io/nadav-jac/shelfy-{arch}"
